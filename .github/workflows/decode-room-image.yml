@@ -1,0 +1,27 @@
+name: Decode room image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: severin-work
+      - name: Decode image
+        run: |
+          mkdir -p docs/assets/severin
+          base64 -d docs/assets/severin/severin-noir-dalle-001.jpg.b64 > docs/assets/severin/severin-room-001.jpg
+          ls -lh docs/assets/severin/severin-room-001.jpg
+      - name: Save image
+        run: |
+          git config user.name actions
+          git config user.email actions@github.com
+          git add docs/assets/severin/severin-room-001.jpg
+          git commit -m "Decode room image" || true
+          git push || true

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <title>Голос Северина</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: #050608;
+      color: #f2f5f7;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    body {
+      background-image: radial-gradient(circle at 20% 10%, #1d3147 0, #050608 44%, #020304 100%);
+    }
+    .wrap {
+      width: 88%;
+      max-width: 780px;
+      margin: 4vh auto;
+      padding: 7vw;
+      border: 1px solid #1c2633;
+      border-radius: 28px;
+      background: #0b1018;
+      box-shadow: 0 0 70px rgba(0, 0, 0, 0.65);
+    }
+    h1 {
+      margin: 0 0 18px 0;
+      font-size: 13vw;
+      line-height: .95;
+      letter-spacing: -0.05em;
+    }
+    .status {
+      margin: 22px 0;
+      padding: 18px;
+      border-radius: 18px;
+      background: #151a24;
+      color: #f3b36b;
+      font-size: 22px;
+      line-height: 1.35;
+    }
+    .message {
+      margin: 22px 0;
+      font-size: 28px;
+      line-height: 1.25;
+      color: #f2f5f7;
+    }
+    button {
+      width: 100%;
+      margin: 12px 0;
+      padding: 24px;
+      border: 0;
+      border-radius: 22px;
+      color: #fff;
+      background: #25658d;
+      font-size: 28px;
+      font-weight: 700;
+    }
+    button.secondary {
+      background: #202b39;
+      color: #cbd5e1;
+      font-size: 22px;
+    }
+    .hint {
+      margin-top: 20px;
+      color: #9aa6b5;
+      font-size: 18px;
+      line-height: 1.45;
+    }
+    .small {
+      color: #6f7b89;
+      font-size: 16px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Голос<br>Северина</h1>
+    <div id="status" class="status">звук: нажми «Запустить голос»</div>
+    <button id="startButton" type="button">▶ Запустить голос</button>
+    <button id="repeatButton" class="secondary" type="button">Повторить текущую реплику</button>
+    <div id="message" class="message">Жду сообщение…</div>
+    <div id="meta" class="small">—</div>
+    <div class="hint">
+      Открой эту страницу на телефоне, а маску оставь на ТВ. Телефон будет читать тот же <b>message.json</b>, который показывает экран. Если подключить телефон к колонке — голос пойдёт туда.
+    </div>
+  </div>
+
+  <script type="text/javascript">
+    (function () {
+      var messageUrl = './message.json';
+      var pollMs = 4000;
+      var lastId = null;
+      var lastText = '';
+      var enabled = false;
+      var wakeLock = null;
+
+      function byId(id) { return document.getElementById(id); }
+      var el = {
+        status: byId('status'),
+        startButton: byId('startButton'),
+        repeatButton: byId('repeatButton'),
+        message: byId('message'),
+        meta: byId('meta')
+      };
+
+      function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, function (ch) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+      }
+
+      function setStatus(text) { el.status.innerHTML = escapeHtml(text); }
+
+      function speechAvailable() {
+        return !!(window.speechSynthesis && window.SpeechSynthesisUtterance);
+      }
+
+      function requestWakeLock() {
+        if (!navigator.wakeLock || !navigator.wakeLock.request) return;
+        navigator.wakeLock.request('screen').then(function (lock) {
+          wakeLock = lock;
+        }).catch(function () {});
+      }
+
+      function speak(text) {
+        if (!enabled) return;
+        if (!text) return;
+        if (!speechAvailable()) {
+          setStatus('звук: этот браузер не умеет TTS');
+          return;
+        }
+        try {
+          window.speechSynthesis.cancel();
+          var u = new SpeechSynthesisUtterance(text);
+          u.lang = 'ru-RU';
+          u.rate = 0.95;
+          u.pitch = 0.85;
+          u.onstart = function () { setStatus('звук: говорю'); };
+          u.onend = function () { setStatus('звук: слушаю новые сообщения'); };
+          u.onerror = function () { setStatus('звук: браузер не дал произнести'); };
+          window.speechSynthesis.speak(u);
+          setStatus('звук: команда отправлена');
+        } catch (e) {
+          setStatus('звук: ошибка запуска');
+        }
+      }
+
+      function render(data) {
+        var text = data.text || '…';
+        var id = data.id || data.updatedAt || text;
+        lastText = text;
+        el.message.innerHTML = escapeHtml(text);
+        el.meta.innerHTML = 'id: ' + escapeHtml(id) + '<br>режим: ' + escapeHtml(data.mood || '—') + '<br>эмоция: ' + escapeHtml(data.emotion || '—');
+        if (enabled && id !== lastId && data.voice !== false) {
+          speak(text);
+        }
+        lastId = id;
+      }
+
+      function loadMessage() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', messageUrl + '?t=' + new Date().getTime(), true);
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState !== 4) return;
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try { render(JSON.parse(xhr.responseText)); }
+            catch (e) { setStatus('ошибка JSON'); }
+          } else {
+            setStatus('ошибка загрузки: HTTP ' + xhr.status);
+          }
+        };
+        xhr.onerror = function () { setStatus('ошибка сети'); };
+        xhr.send(null);
+      }
+
+      el.startButton.onclick = function () {
+        enabled = true;
+        requestWakeLock();
+        if (speechAvailable()) setStatus('звук: включён, слушаю новые сообщения');
+        else setStatus('звук: этот браузер не умеет TTS');
+        speak(lastText || el.message.innerText || el.message.textContent);
+      };
+
+      el.repeatButton.onclick = function () {
+        enabled = true;
+        requestWakeLock();
+        speak(lastText || el.message.innerText || el.message.textContent);
+      };
+
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible' && enabled) requestWakeLock();
+      });
+
+      loadMessage();
+      setInterval(loadMessage, pollMs);
+    }());
+  </script>
+</body>
+</html>

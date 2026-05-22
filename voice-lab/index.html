@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Severin Voice Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <p class="eyebrow">SEVERIN / VOICE BRIDGE</p>
+      <h1>Голосовой мост для ТВ-приставки</h1>
+      <p class="lead">
+        Браузерный TTS на ТВ может молчать как обиженный холодильник. Поэтому здесь три слоя:
+        native TTS → MP3 fallback → WebAudio динозавр.
+      </p>
+
+      <label class="field">
+        <span>Фраза</span>
+        <textarea id="voiceText" rows="4">Марина, мост голоса поднят. Если браузер опять строит из себя кирпич, динозавр скажет за него.</textarea>
+      </label>
+
+      <div class="buttons">
+        <button id="unlockBtn" type="button">1. Разбудить звук</button>
+        <button id="speakBtn" type="button">2. Сказать</button>
+        <button id="mp3Btn" type="button">MP3</button>
+        <button id="dinoBtn" type="button">Динозавр</button>
+      </div>
+
+      <audio id="fallbackAudio" preload="auto" src="./audio/dino.mp3"></audio>
+
+      <pre id="log" aria-live="polite">Готов. На ТВ сначала нажми “Разбудить звук”.</pre>
+    </section>
+  </main>
+
+  <script src="./voice.js"></script>
+</body>
+</html>

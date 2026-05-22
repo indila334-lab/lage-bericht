@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тест MP3</title>
+  <style>
+    html,body{margin:0;padding:0;min-height:100%;background:#050608;color:#fff;font-family:Arial,Helvetica,sans-serif}
+    .wrap{width:88%;max-width:900px;margin:5vh auto;padding:6vw;border-radius:28px;background:#0b1018;border:1px solid #1c2633;box-shadow:0 0 70px rgba(0,0,0,.65)}
+    h1{font-size:54px;line-height:1;margin:0 0 24px;letter-spacing:-.04em}
+    p{font-size:25px;line-height:1.35;color:#cbd5e1}
+    button{width:100%;margin:14px 0;padding:26px;border:0;border-radius:22px;background:#25658d;color:#fff;font-size:30px;font-weight:700}
+    audio{width:100%;margin:18px 0;background:#111827;border-radius:18px}
+    .box{margin-top:20px;padding:20px;border-radius:18px;background:#111827;color:#f3b36b;font-size:23px;line-height:1.35}
+    .small{color:#8b98a8;font-size:18px;line-height:1.4}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Тест MP3 / audio</h1>
+    <p>Проверяем не TTS, а обычное воспроизведение готового аудио-файла. Это ближе к будущему варианту с mp3-голосом Северина.</p>
+
+    <button id="mp3Btn" type="button">1. Проиграть внешний MP3</button>
+    <button id="wavBtn" type="button">2. Проиграть локальный WAV-сигнал</button>
+    <audio id="player" controls></audio>
+
+    <div id="result" class="box">Нажми 1 или 2. Если слышишь звук — ТВ умеет проигрывать готовое аудио.</div>
+    <p class="small">Если MP3 не играет, но WAV играет — проблема может быть во внешней ссылке. Если оба играют — путь с готовым audioUrl рабочий. Если оба молчат — браузер/ТВ режет audio-тег.</p>
+  </div>
+
+  <script type="text/javascript">
+    (function(){
+      var player = document.getElementById('player');
+      var result = document.getElementById('result');
+      function log(t){ result.innerHTML = t; }
+
+      function playUrl(url, label){
+        try{
+          player.pause();
+          player.src = url;
+          player.load();
+          var p = player.play();
+          log(label + ': команда play отправлена. Если тишина — смотри, не заблокировал ли браузер звук.');
+          if (p && p.then) {
+            p.then(function(){ log(label + ': воспроизведение стартовало.'); })
+             .catch(function(e){ log(label + ': браузер отказал play: ' + (e && e.message ? e.message : e)); });
+          }
+        }catch(e){ log(label + ': ошибка: ' + e.message); }
+      }
+
+      function makeWavDataUrl(){
+        var sampleRate = 22050;
+        var seconds = 1;
+        var samples = sampleRate * seconds;
+        var bytesPerSample = 2;
+        var dataSize = samples * bytesPerSample;
+        var buffer = new ArrayBuffer(44 + dataSize);
+        var view = new DataView(buffer);
+        function writeString(offset, s){ for(var i=0;i<s.length;i++) view.setUint8(offset+i, s.charCodeAt(i)); }
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * bytesPerSample, true);
+        view.setUint16(32, bytesPerSample, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, dataSize, true);
+        for(var j=0;j<samples;j++){
+          var t = j / sampleRate;
+          var fade = Math.min(1, j/1500, (samples-j)/1500);
+          var value = Math.sin(2*Math.PI*440*t) * 0.35 * fade;
+          view.setInt16(44 + j*2, value * 32767, true);
+        }
+        var binary = '';
+        var bytes = new Uint8Array(buffer);
+        for(var k=0;k<bytes.length;k++) binary += String.fromCharCode(bytes[k]);
+        return 'data:audio/wav;base64,' + btoa(binary);
+      }
+
+      document.getElementById('mp3Btn').onclick = function(){
+        playUrl('https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3', 'MP3');
+      };
+      document.getElementById('wavBtn').onclick = function(){
+        playUrl(makeWavDataUrl(), 'WAV');
+      };
+    }());
+  </script>
+</body>
+</html>

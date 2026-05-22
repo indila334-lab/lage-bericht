@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="sea gothic crab">
+  <defs>
+    <linearGradient id="sea" x1="15%" y1="10%" x2="90%" y2="90%">
+      <stop offset="0" stop-color="#042b33"/>
+      <stop offset="0.35" stop-color="#096b78"/>
+      <stop offset="0.7" stop-color="#0b1e45"/>
+      <stop offset="1" stop-color="#02050b"/>
+    </linearGradient>
+    <filter id="aqua" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M21 74 C10 67 8 52 17 42 C27 48 30 61 25 75" fill="none" stroke="#083b48" stroke-width="8" stroke-linecap="round"/>
+  <path d="M107 74 C118 67 120 52 111 42 C101 48 98 61 103 75" fill="none" stroke="#083b48" stroke-width="8" stroke-linecap="round"/>
+  <path d="M31 48 C35 30 50 22 64 22 C78 22 93 30 97 48 C105 53 108 65 104 78 C98 95 83 105 64 105 C45 105 30 95 24 78 C20 65 23 53 31 48Z" fill="url(#sea)" stroke="#9de7e8" stroke-width="3"/>
+  <path d="M40 47 L32 28 M88 47 L96 28" stroke="#9de7e8" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="42" cy="47" r="5" fill="#cfffff" filter="url(#aqua)"/>
+  <circle cx="86" cy="47" r="5" fill="#cfffff" filter="url(#aqua)"/>
+  <path d="M47 68 C55 76 73 76 81 68" fill="none" stroke="#021218" stroke-width="4" stroke-linecap="round"/>
+  <path d="M34 85 L15 99 M48 93 L38 115 M64 97 L64 119 M80 93 L90 115 M94 85 L113 99" stroke="#9de7e8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M28 80 C42 73 86 73 100 80" fill="none" stroke="#71f5ff" stroke-width="2" opacity=".65"/>
+  <path d="M55 22 C61 11 72 11 77 22" fill="none" stroke="#a6fff7" stroke-width="2" opacity=".75"/>
+</svg>

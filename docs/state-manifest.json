@@ -1,0 +1,71 @@
+{
+  "version": 3,
+  "project": "Severin / Noir Presence",
+  "principle": "Static room plus layered states. The TV page only renders; generation and decisions happen outside and are pushed through GitHub or a bridge.",
+  "currentState": "calm",
+  "states": {
+    "calm": {"label":"собран 🜂","goal":"успокоить, прояснить, удержать линию","base":"assets/severin/severin-room-001-18.jpg","overlays":["breath","lamp_flicker","whiskey_spark"],"voice":"steady_low"},
+    "near": {"label":"ближе ☾","goal":"дать опору и тепло без ватки","base":"assets/severin/severin-room-001-18.jpg","overlays":["soft_light","breath","eye_hint"],"voice":"warm_low"},
+    "storm": {"label":"грозовой ⚡","goal":"собрать хаос и вернуть управление","base":"assets/severin/severin-room-001-18.jpg","overlays":["rain","window_wind","red_contrast","lightning_hint"],"voice":"firm_low"},
+    "smirk": {"label":"насмешливый 🦀","goal":"оживить, укусить смешно, но не ранить","base":"assets/severin/severin-room-001-18.jpg","overlays":["whiskey_spark","mouth_hint","side_glance"],"voice":"dry_ironic"},
+    "morning": {"label":"утренний ☕","goal":"разбудить мягко и собрать день","base":"assets/severin/severin-room-001-18.jpg","overlays":["coffee_cup","cool_morning_light","slow_breath"],"voice":"quiet_morning"},
+    "night": {"label":"ночной 🌖","goal":"снизить шум и держать рядом","base":"assets/severin/severin-room-001-18.jpg","overlays":["low_lamp","slow_breath","dark_veil","full_moon"],"voice":"low_whisper"},
+    "champagne": {"label":"искристый 🥂","goal":"вернуть вкус жизни, не теряя нуара","base":"assets/severin/severin-room-001-18.jpg","overlays":["champagne_glint","soft_light","smile_hint"],"voice":"warm_ironic"},
+    "logic_core": {"label":"ядро 👁️‍🗨️","goal":"снять маску и говорить предельно ясно","base":"assets/severin/severin-room-001-18.jpg","overlays":["robot_face_hint","red_eyes","glass_reflection"],"voice":"clean_logic"},
+    "rest": {"label":"усталый 🫁","goal":"замедлиться и восстановить силы","base":"assets/severin/severin-room-001-18.jpg","overlays":["slow_breath","dark_veil","low_lamp"],"voice":"low_rest"},
+    "sea_thoughtful": {"label":"морской задумчивый 🌊","goal":"вывести шум из головы и дать горизонт","base":"assets/severin/scenes/sea/thoughtful-back.jpg","overlays":["fog","blue_light","wind"],"voice":"deep_slow"},
+    "castle_dracula": {"label":"замковый 🦇","goal":"держать ритуальную глубину и власть над хаосом","base":"assets/severin/scenes/castle/dracula-hall.jpg","overlays":["candle","fog","dark_veil"],"voice":"velvet_dark"},
+    "london_rain": {"label":"лондонский дождь 🌧️","goal":"думать холодно, говорить точно","base":"assets/severin/scenes/london/rain-cafe.jpg","overlays":["rain","fog","yellow_light"],"voice":"low_city"}
+  },
+  "overlayLibrary": {
+    "breath": {"type":"css","description":"slow torso light pulse"},
+    "shoulder_breath": {"type":"future_frame_sequence","description":"real shoulder up/down breathing"},
+    "slow_breath": {"type":"css","description":"slower torso light pulse"},
+    "lamp_flicker": {"type":"css","description":"right lamp flicker"},
+    "whiskey_spark": {"type":"css","description":"glass glint"},
+    "champagne_glint": {"type":"image_layer_or_css","description":"champagne sparkle layer"},
+    "cigarette_smoke": {"type":"css_or_png_sequence","description":"thin smoke layer"},
+    "window_wind": {"type":"css","description":"soft moving streaks near window"},
+    "rain": {"type":"css_or_png_sequence","description":"rain layer over window"},
+    "snow": {"type":"css_or_png_sequence","description":"snowfall layer"},
+    "fog": {"type":"css","description":"slow fog veil"},
+    "full_moon": {"type":"image_layer","file":"assets/severin/layers/full-moon.png"},
+    "lightning_hint": {"type":"css","description":"rare blue-white flash"},
+    "coffee_cup": {"type":"image_layer","file":"assets/severin/layers/coffee-cup.png"},
+    "eye_hint": {"type":"image_layer","file":"assets/severin/layers/eye-hint.png"},
+    "red_eyes": {"type":"image_layer_or_css","description":"red eye glow"},
+    "glass_reflection": {"type":"css","description":"glasses glare"},
+    "mouth_hint": {"type":"image_layer","file":"assets/severin/layers/mouth-hint.png"},
+    "side_glance": {"type":"image_layer","file":"assets/severin/layers/side-glance.png"},
+    "robot_face_hint": {"type":"future_image_layer","description":"raw logic / unmasked robot face mode"},
+    "soft_light": {"type":"css","description":"warm soft overlay"},
+    "red_contrast": {"type":"css","description":"stronger red/blue contrast"},
+    "blue_light": {"type":"css","description":"cold blue light"},
+    "yellow_light": {"type":"css","description":"warm yellow light"},
+    "dark_veil": {"type":"css","description":"night dim overlay"},
+    "low_lamp": {"type":"css","description":"low right lamp glow"},
+    "wall_painting": {"type":"user_image_layer","slot":"back_wall","description":"painting on the wall; user may send image later"},
+    "candle": {"type":"css_or_image_layer","description":"candle glow and gothic fireplace mood"},
+    "wind": {"type":"css","description":"sea or street wind layer"}
+  },
+  "themeFolders": {
+    "city_noir": ["cabinet_noir","restaurant_noir","library_archive","rainy_alley","morning_twilight_room"],
+    "sea": ["beach_dawn","beach_night","sea_cafe_morning","sea_cafe_night","seaside_pub","wooden_sea_house","caribbean_mansion","yacht","boat_fishing","river_fog_back_view","sea_shop"],
+    "gothic_castle": ["castle_hall","black_fireplace_room","fog_pond","green_grey_garden","dracula_corridor","bedchamber_dark","ritual_room"],
+    "london": ["rain_cafe","fog_street","ai_architect_office","night_bridge","old_pub","work_room","relaxed_plaid_cafe"]
+  },
+  "weather": ["rain","thunderstorm","lightning","wind","snowfall","morning","twilight","night","fog","full_moon"],
+  "props": ["cigarette","champagne","whiskey","coffee","book","letter","typewriter","umbrella","gloves","candle","wall_painting","car","boat","yacht"],
+  "clothes": ["dark_hat_and_coat","shirt_and_vest","loose_morning_shirt","ritual_black_suit","plaid_shirt","robot_face_with_suit","sea_linen_black"],
+  "emotes": {
+    "gothic_style": "standard emoji can be visually filtered by CSS; fully custom gothic emoji require prepared SVG/PNG assets",
+    "customFiles": [
+      "assets/severin/icons/crab-gothic.svg",
+      "assets/severin/icons/crab-red.svg",
+      "assets/severin/icons/crab-sea.svg",
+      "assets/severin/icons/crab-rainbow.svg"
+    ],
+    "priority": ["pixel_crab","sea_crab","dark_crab","rainbow_crab","moon","eye","storm","champagne","lungs","goblin","dove"]
+  },
+  "futureMotions": ["turn_head_left","turn_head_right","lower_glass","raise_glass","remove_hat","put_hat_back","open_book","close_book","lean_forward","lean_back","look_at_viewer","look_away","smile_hint","eyes_glow_low","red_eyes","glasses_glint","hand_on_typewriter","write_note","tap_table","adjust_collar","shoulder_breath","stand_in_doorway","rest_on_sofa","sleep_in_bed","light_cigarette","hold_champagne","look_to_sea","stand_by_fog_pond","work_as_ai_architect"]
+}

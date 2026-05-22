@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Severin Mask Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main id="stage" class="stage" data-mood="wake">
+    <section class="mask-shell" aria-label="Severin mask visual stage">
+      <div class="aura aura-back"></div>
+      <div class="mask" id="mask" role="img" aria-label="Живая маска Северина">
+        <div class="brow brow-left"></div>
+        <div class="brow brow-right"></div>
+        <div class="eye eye-left"><span></span></div>
+        <div class="eye eye-right"><span></span></div>
+        <div class="nose"></div>
+        <div class="mouth"></div>
+        <div class="scar"></div>
+      </div>
+      <div class="aura aura-front"></div>
+    </section>
+
+    <aside class="hud" aria-live="polite">
+      <p class="label">SEVERIN / MASK BRIDGE</p>
+      <h1 id="moodTitle">Пробуждение</h1>
+      <p id="moodLine">Маска поднята. Экран дышит. Подвал открыт.</p>
+      <p class="hint">Клавиши: 1 wake · 2 focus · 3 grin · 4 storm · 5 shadow · space pulse</p>
+    </aside>
+  </main>
+
+  <script src="./mask.js"></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тест звука</title>
+  <style>
+    html, body { margin:0; padding:0; min-height:100%; background:#050608; color:#fff; font-family:Arial, Helvetica, sans-serif; }
+    .wrap { width:88%; margin:5vh auto; max-width:900px; }
+    h1 { font-size:56px; line-height:1; margin:0 0 30px; }
+    p { font-size:28px; line-height:1.35; color:#cbd5e1; }
+    button { width:100%; margin:16px 0; padding:28px; border:0; border-radius:20px; font-size:32px; font-weight:700; background:#1687bd; color:#fff; }
+    .box { margin-top:24px; padding:22px; border-radius:18px; background:#111827; font-size:24px; color:#f3b36b; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Тест звука ТВ</h1>
+    <p>Этот тест проверяет две разные вещи: обычный звук браузера и голосовой движок Speech/TTS.</p>
+    <button id="beep">1. Проиграть писк</button>
+    <button id="tts">2. Сказать фразу через TTS</button>
+    <div id="result" class="box">Нажми кнопки по очереди.</div>
+    <p>Если писк есть, а фразы нет — браузер умеет звук, но не умеет синтез речи. Тогда фильмы работают, а текст голосом через Web Speech — нет.</p>
+  </div>
+  <script>
+    var result = document.getElementById('result');
+    function log(t){ result.innerHTML = t; }
+
+    document.getElementById('beep').onclick = function(){
+      try {
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) { log('Обычный Web Audio не найден. Пробую audio-тег ниже невозможно проверить.'); return; }
+        var ctx = new AudioContext();
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 660;
+        gain.gain.value = 0.22;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        setTimeout(function(){ osc.stop(); ctx.close(); }, 450);
+        log('Писк отправлен. Если ты его слышала — звук в браузере есть.');
+      } catch(e) {
+        log('Не смог запустить писк: ' + e.message);
+      }
+    };
+
+    document.getElementById('tts').onclick = function(){
+      if (!(window.speechSynthesis && window.SpeechSynthesisUtterance)) {
+        log('Speech/TTS не найден. Это значит: звук может быть, но говорить текстом этот браузер не умеет.');
+        return;
+      }
+      try {
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance('Марина, это тест голоса Северина через браузер телевизора.');
+        u.lang = 'ru-RU';
+        u.onstart = function(){ log('TTS стартовал. Если слышно фразу — голос работает.'); };
+        u.onerror = function(){ log('TTS есть, но браузер не дал произнести.'); };
+        u.onend = function(){ log('TTS закончил фразу.'); };
+        window.speechSynthesis.speak(u);
+        log('Команда TTS отправлена.');
+      } catch(e) {
+        log('Ошибка TTS: ' + e.message);
+      }
+    };
+  </script>
+</body>
+</html>

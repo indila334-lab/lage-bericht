@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-label="Severin noir portrait">
+  <defs>
+    <radialGradient id="topLight" cx="56%" cy="0%" r="62%">
+      <stop offset="0" stop-color="#f4f0dd" stop-opacity="0.72"/>
+      <stop offset="0.22" stop-color="#d6d2bf" stop-opacity="0.28"/>
+      <stop offset="0.58" stop-color="#111" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="room" x1="0" x2="1">
+      <stop offset="0" stop-color="#030303"/>
+      <stop offset="0.46" stop-color="#0d0d0d"/>
+      <stop offset="0.74" stop-color="#171717"/>
+      <stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="coat" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#000"/>
+      <stop offset="0.42" stop-color="#070707"/>
+      <stop offset="0.62" stop-color="#202020"/>
+      <stop offset="1" stop-color="#020202"/>
+    </linearGradient>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.78" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="table" tableValues="0 0.22"/></feComponentTransfer>
+    </filter>
+    <filter id="soft"><feGaussianBlur stdDeviation="2.4"/></filter>
+    <filter id="eyeGlow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#room)"/>
+  <rect width="1280" height="720" fill="url(#topLight)"/>
+  <rect width="1280" height="720" filter="url(#grain)" opacity="0.55"/>
+
+  <path d="M0 618 C210 570 358 590 516 640 C700 700 940 690 1280 628 L1280 720 L0 720 Z" fill="#000" opacity="0.74"/>
+  <path d="M88 0 L184 720" stroke="#f0f0e0" stroke-opacity="0.08" stroke-width="2"/>
+  <path d="M1180 0 L1010 720" stroke="#f0f0e0" stroke-opacity="0.08" stroke-width="2"/>
+
+  <!-- shoulders and coat -->
+  <path d="M226 720 C264 610 316 532 406 480 C492 430 760 426 850 478 C950 536 1030 628 1072 720 Z" fill="#010101"/>
+  <path d="M338 720 C354 586 418 484 506 420 C556 470 596 570 620 720 Z" fill="#050505"/>
+  <path d="M942 720 C914 586 858 486 772 420 C724 472 682 570 662 720 Z" fill="#070707"/>
+  <path d="M472 720 C486 575 538 478 612 416 C650 486 672 592 680 720 Z" fill="url(#coat)"/>
+  <path d="M812 720 C790 575 742 478 668 416 C636 486 622 592 616 720 Z" fill="url(#coat)"/>
+
+  <!-- shirt / tie fragments -->
+  <path d="M574 416 C594 468 612 560 625 720 L672 720 C684 560 700 468 720 416 C682 448 612 448 574 416 Z" fill="#d7d7cf" opacity="0.9"/>
+  <path d="M634 452 L674 520 L654 720 L616 720 L598 520 Z" fill="#030303" opacity="0.95"/>
+
+  <!-- neck and face -->
+  <path d="M600 312 C610 370 676 370 688 312 L708 430 C674 456 610 456 580 430 Z" fill="#020202"/>
+  <path d="M540 118 C580 62 700 62 742 122 C788 188 750 324 690 374 C654 404 594 402 558 370 C500 318 486 190 540 118 Z" fill="#020202"/>
+
+  <!-- hair light, jaw, cheek cuts -->
+  <path d="M548 124 C582 86 690 78 730 118 C690 98 604 98 566 128 Z" fill="#dfdfd5" opacity="0.42" filter="url(#soft)"/>
+  <path d="M704 300 C742 294 770 272 790 242 C770 304 736 340 700 348 Z" fill="#d8d8d0" opacity="0.18"/>
+  <path d="M524 246 C552 282 588 300 628 296 C594 320 554 312 520 276 Z" fill="#d8d8d0" opacity="0.14"/>
+
+  <!-- eyes, almost hidden -->
+  <path d="M580 224 C604 216 630 216 654 224 C628 229 604 229 580 224 Z" fill="#eaffff" opacity="0.9" filter="url(#eyeGlow)"/>
+  <path d="M670 224 C696 216 722 216 746 224 C720 229 696 229 670 224 Z" fill="#eaffff" opacity="0.82" filter="url(#eyeGlow)"/>
+
+  <!-- ink darkness over face -->
+  <path d="M506 98 C602 180 686 280 750 430 C676 398 596 398 522 430 C470 286 468 178 506 98 Z" fill="#000" opacity="0.32"/>
+  <path d="M424 720 C520 622 760 620 880 720 Z" fill="#000" opacity="0.76"/>
+
+  <!-- table / foreground -->
+  <path d="M0 664 C320 642 918 640 1280 662 L1280 720 L0 720 Z" fill="#050505" opacity="0.88"/>
+  <path d="M430 650 C520 636 744 636 860 652" stroke="#f5f1dc" stroke-opacity="0.18" stroke-width="5" filter="url(#soft)"/>
+</svg>
