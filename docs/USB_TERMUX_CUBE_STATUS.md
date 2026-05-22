@@ -109,13 +109,75 @@ Meaning:
 Termux received an opened file descriptor for the XiaoZhi cube and passed it to the script as fd 7.
 ```
 
+## Read-only USB descriptor result
+
+Pluton/OpenCode connected through the already running SSH bridge and ran read-only USB descriptor inspection through the `termux-usb` file descriptor path.
+
+No flash, erase, write, reboot, or bootloader commands were used.
+
+Device:
+
+```text
+/dev/bus/usb/001/005
+```
+
+Descriptors:
+
+```text
+vendorId:      0x303a
+productId:     0x1001
+manufacturer:  Espressif
+product:       USB JTAG/serial debug unit
+serial:        1C:DB:D4:79:3F:AC
+
+USB:           2.00
+deviceClass:   0xef
+subClass:      0x02
+protocol:      0x01
+config:        1
+maxPower:      500 mA
+```
+
+Interfaces:
+
+```text
+IAD:
+  first: 0
+  count: 2
+  class: 0x02
+  subclass: 0x02
+
+interface 0:
+  class 0x02, subclass 0x02, protocol 0x00
+  endpoint IN 0x82 interrupt
+
+interface 1:
+  class 0x0a, subclass 0x02, protocol 0x00
+  endpoint OUT 0x01 bulk
+  endpoint IN  0x81 bulk
+
+interface 2:
+  class 0xff, subclass 0xff, protocol 0x01
+  endpoint OUT 0x02 bulk
+  endpoint IN  0x83 bulk
+```
+
+Conclusion from descriptor inspection:
+
+```text
+The cube exposes an Espressif ESP32-S3 native USB device: USB JTAG/serial debug unit.
+It includes a CDC serial part and a vendor-specific JTAG part.
+The absence of /dev/ttyUSB0 and /dev/ttyACM0 is an Android/Termux access model issue, not evidence that the cube is not exposing USB serial/JTAG.
+```
+
 ## Current conclusion
 
 - The phone sees the cube through the hub.
 - Android granted Termux access to the cube.
 - No normal tty serial device appeared.
 - The usable path is currently `termux-usb -e` / file descriptor based access.
-- Next step for Pluton/OpenCode: inspect USB descriptors through the passed fd and determine whether the cube exposes ESP32 CDC/JTAG/serial interfaces via Android USB API.
+- The device is confirmed as Espressif `USB JTAG/serial debug unit` with vendorId `0x303a`, productId `0x1001`.
+- Next step: save Pluton's descriptor script if useful, then decide whether to use Android USB FD tooling for read-only inspection/serial access, or switch to a normal computer for flashing/debugging if needed.
 
 ## Safety rule
 
