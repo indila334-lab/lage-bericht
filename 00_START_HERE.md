@@ -8,6 +8,22 @@ Repository identity:
 
 This is the main memory repository for Project Severin. It is not `noir-presence-lab`, even if some older files or templates mention that name.
 
+## If GitHub reading is limited
+
+Some ChatGPT/GitHub tools cannot list folders properly, cannot search this repository, or cannot read PDFs reliably. If that happens, do not waste time trying to reconstruct the project from root PDFs.
+
+Read this exact file first:
+
+`notes/severin-full-project-handoff-2026-05-23.md`
+
+Direct URL:
+
+https://github.com/indila334-lab/lage-bericht/blob/main/notes/severin-full-project-handoff-2026-05-23.md
+
+That file is the current single source of truth. It summarizes the project, repositories, Termux, USB diagnostics, firmware state, local bridge, Mordashka assets, GitHub mailbox, and safety rules.
+
+PDF files are historical memory snapshots. They are useful, but they are not blockers. If a tool cannot open them, continue from the full handoff instead of starting over.
+
 ## Active project
 
 Project Severin / XiaoZhi / Termux / Mordashka.
@@ -36,19 +52,26 @@ We are building a physical home Severin:
 - The local Termux bridge was created under `~/xiaozhi-esp32/server/gpt_server.py`.
 - It worked on port `8787` and answered OpenAI-style JSON.
 - The cube is not yet connected to the Termux bridge.
+- USB descriptors were successfully read through Termux raw USB.
+- Normal `/dev/ttyUSB0` and `/dev/ttyACM0` did not appear on Android.
 - Do not flash the cube blindly.
 
 ## Read next
 
-- `README.md` — repository identity and top-level description.
-- `docs/PROJECT_STATE_SEVERIN_XIAOZHI.md` — project state.
-- `docs/NEXT_STEPS.md` — next actions.
-- `docs/REPOSITORIES_MAP.md` — repository map.
-- `docs/TERMUX_BRIDGE.md` — Termux bridge details.
-- Root PDF snapshots — important chat memory exports. File names may be odd because mobile upload can rename PDFs.
+Recommended order:
+
+1. `notes/severin-full-project-handoff-2026-05-23.md` — current full handoff and recovery point.
+2. `README.md` — repository identity and top-level description.
+3. `docs/PROJECT_STATE_SEVERIN_XIAOZHI.md` — project state.
+4. `docs/NEXT_STEPS.md` — next actions.
+5. `docs/REPOSITORIES_MAP.md` — repository map.
+6. `docs/TERMUX_BRIDGE.md` — Termux bridge details.
+7. Root PDF snapshots — optional historical chat memory exports. File names may be odd because mobile upload can rename PDFs.
 
 ## Working rule
 
 If a future chat sees old wording like `noir-presence-lab`, treat it as inherited template residue unless the task explicitly concerns the old noir repository.
 
 For the current Severin hardware/memory work, start from `indila334-lab/lage-bericht`.
+
+If a GitHub tool cannot open some PDFs or list a directory, report that limitation clearly and continue from the full handoff file. Do not tell Marina that the project context is missing if `notes/severin-full-project-handoff-2026-05-23.md` is readable.
