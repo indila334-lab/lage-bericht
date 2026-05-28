@@ -21,6 +21,8 @@ jobs:
           script: |
             set -e
 
+            export DEBIAN_FRONTEND=noninteractive
+
             apt-get update
             apt-get install -y curl unzip openssl ca-certificates
 
@@ -45,7 +47,7 @@ jobs:
                 {
                   "tag": "vless-reality",
                   "listen": "0.0.0.0",
-                  "port": 443,
+                  "port": 8443,
                   "protocol": "vless",
                   "settings": {
                     "clients": [
@@ -84,11 +86,11 @@ jobs:
             EOF
 
             if command -v ufw >/dev/null 2>&1; then
-              ufw allow 443/tcp || true
+              ufw allow 8443/tcp || true
               ufw reload || true
             fi
 
-            iptables -I INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
+            iptables -I INPUT -p tcp --dport 8443 -j ACCEPT 2>/dev/null || true
 
             systemctl enable xray
             systemctl restart xray
@@ -96,7 +98,7 @@ jobs:
             sleep 2
             systemctl is-active xray
 
-            LINK="vless://${UUID}@91.184.242.59:443?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=www.microsoft.com&sid=${SHORT_ID}&spx=%2F&flow=xtls-rprx-vision#Marina-Aeza-Reality"
+            LINK="vless://${UUID}@91.184.242.59:8443?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=www.microsoft.com&sid=${SHORT_ID}&spx=%2F&flow=xtls-rprx-vision#Marina-Aeza-Reality"
 
             echo "========== HIDDIFY_LINK_START =========="
             echo "$LINK"
