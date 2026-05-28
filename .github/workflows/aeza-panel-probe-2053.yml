@@ -1,0 +1,15 @@
+name: Aeza panel probe 2053
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check port 2053
+        run: |
+          set +e
+          curl -I --max-time 12 http://91.184.242.59:2053/marina-panel/
+          echo EXIT_CODE=$?
