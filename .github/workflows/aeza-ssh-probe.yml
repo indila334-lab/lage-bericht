@@ -1,0 +1,26 @@
+name: Aeza SSH probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: "VPS host or IP"
+        required: true
+        default: "91.184.242.59"
+      port:
+        description: "SSH port"
+        required: true
+        default: "22"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe TCP port
+        run: |
+          HOST="${{ inputs.host }}"
+          PORT="${{ inputs.port }}"
+          echo "Testing TCP connection to ${HOST}:${PORT} from GitHub Actions"
+          timeout 15 bash -c "cat < /dev/null > /dev/tcp/${HOST}/${PORT}"
+          echo "OK: port is reachable from GitHub Actions"
