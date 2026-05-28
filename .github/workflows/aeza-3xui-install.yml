@@ -1,0 +1,47 @@
+name: Aeza 3x-ui install
+
+on:
+  workflow_dispatch:
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install 3x-ui on Aeza VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          timeout: 30s
+          command_timeout: 15m
+          script: |
+            set -e
+            apt-get update
+            apt-get install -y curl openssl
+            PANEL_PORT=13497
+            PANEL_USER=marina
+            PANEL_PATH=marina-panel
+            PANEL_PASS=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 16)
+            if ! command -v x-ui >/dev/null 2>&1 && [ ! -x /usr/local/x-ui/x-ui ]; then
+              printf '1\ny\n13497\n4\nn\n' | bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/master/install.sh)
+            fi
+            XUI=/usr/local/x-ui/x-ui
+            if [ ! -x "$XUI" ]; then
+              XUI=$(command -v x-ui)
+            fi
+            "$XUI" setting -username "$PANEL_USER" -password "$PANEL_PASS" -port "$PANEL_PORT" -webBasePath "$PANEL_PATH"
+            "$XUI" setting -listenIP 0.0.0.0 || true
+            if command -v ufw >/dev/null 2>&1; then
+              ufw allow 22/tcp || true
+              ufw allow 13497/tcp || true
+              ufw reload || true
+            fi
+            systemctl enable x-ui || true
+            systemctl restart x-ui || systemctl start x-ui
+            echo "DONE_3XUI_INSTALL"
+            echo "PANEL_URL=http://91.184.242.59:13497/marina-panel"
+            echo "PANEL_USER=marina"
+            echo "PANEL_PASSWORD=$PANEL_PASS"
