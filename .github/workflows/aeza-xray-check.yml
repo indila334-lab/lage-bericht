@@ -1,0 +1,36 @@
+name: Aeza Xray check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          timeout: 30s
+          command_timeout: 4m
+          script: |
+            set +e
+            echo CONFIG_TEST
+            xray run -test -config /usr/local/etc/xray/config.json
+            echo TEST_CODE
+            echo $?
+            echo SERVICE_ACTIVE
+            systemctl is-active xray
+            echo ACTIVE_CODE
+            echo $?
+            echo SERVICE_STATUS
+            systemctl status xray --no-pager
+            echo STATUS_CODE
+            echo $?
+            echo OPEN_PORTS
+            ss -ltnp | head -40
+            echo END_CHECK
