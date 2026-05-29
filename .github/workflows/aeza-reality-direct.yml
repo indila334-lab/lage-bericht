@@ -70,10 +70,10 @@ jobs:
                     "security": "reality",
                     "realitySettings": {
                       "show": false,
-                      "dest": "www.microsoft.com:443",
+                      "dest": "www.cloudflare.com:443",
                       "xver": 0,
                       "serverNames": [
-                        "www.microsoft.com"
+                        "www.cloudflare.com"
                       ],
                       "privateKey": "${PRIVATE_KEY}",
                       "shortIds": [
@@ -105,7 +105,7 @@ jobs:
             sleep 2
             systemctl is-active xray
 
-            LINK="vless://${UUID}@91.184.242.59:443?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=www.microsoft.com&sid=${SHORT_ID}&spx=%2F&flow=xtls-rprx-vision#Marina-Aeza-Reality"
+            LINK="vless://${UUID}@91.184.242.59:443?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=www.cloudflare.com&sid=${SHORT_ID}&spx=%2F&flow=xtls-rprx-vision#Marina-Aeza-Reality-CF"
 
             echo "========== HIDDIFY_LINK_START =========="
             echo "$LINK"
