@@ -59,8 +59,7 @@ jobs:
                   "settings": {
                     "clients": [
                       {
-                        "id": "${UUID}",
-                        "flow": "xtls-rprx-vision"
+                        "id": "${UUID}"
                       }
                     ],
                     "decryption": "none"
@@ -105,7 +104,7 @@ jobs:
             sleep 2
             systemctl is-active xray
 
-            LINK="vless://${UUID}@91.184.242.59:443?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=www.cloudflare.com&sid=${SHORT_ID}&spx=%2F&flow=xtls-rprx-vision#Marina-Aeza-Reality-CF"
+            LINK="vless://${UUID}@91.184.242.59:443?type=tcp&security=reality&encryption=none&pbk=${PUBLIC_KEY}&fp=chrome&sni=www.cloudflare.com&sid=${SHORT_ID}&spx=%2F&headerType=none#Marina-Aeza-Reality-CF-noflow"
 
             echo "========== HIDDIFY_LINK_START =========="
             echo "$LINK"
