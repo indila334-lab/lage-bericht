@@ -31,9 +31,16 @@ jobs:
             fi
 
             UUID=$(xray uuid)
-            KEYS=$(xray x25519)
-            PRIVATE_KEY=$(printf "%s\n" "$KEYS" | awk '/Private key:/ {print $3}')
-            PUBLIC_KEY=$(printf "%s\n" "$KEYS" | awk '/Public key:/ {print $3}')
+            KEYS=$(xray x25519 2>&1 || true)
+            PRIVATE_KEY=$(printf "%s\n" "$KEYS" | grep -i "private" | awk '{print $NF}' | tail -n 1)
+            PUBLIC_KEY=$(printf "%s\n" "$KEYS" | grep -i "public" | awk '{print $NF}' | tail -n 1)
+
+            if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
+              echo "KEYGEN_FAILED"
+              echo "$KEYS"
+              exit 1
+            fi
+
             SHORT_ID=$(openssl rand -hex 8)
 
             mkdir -p /usr/local/etc/xray
