@@ -1,0 +1,97 @@
+name: Aeza Hysteria2 install
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install SSH helper
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Install Hysteria2 on Aeza VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          set -e
+
+          sshpass -p "$VPS_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=30 \
+            "$VPS_USER@$VPS_HOST" \
+            "VPS_HOST='$VPS_HOST' bash -s" <<'REMOTE'
+          set -e
+
+          export DEBIAN_FRONTEND=noninteractive
+
+          apt-get update
+          apt-get install -y curl openssl ca-certificates iproute2
+
+          if ! command -v hysteria >/dev/null 2>&1; then
+            bash <(curl -fsSL https://get.hy2.sh/)
+          fi
+
+          mkdir -p /etc/hysteria
+          chmod 700 /etc/hysteria
+
+          if [ -f /etc/hysteria/marina-hy2-password ]; then
+            HY2PASS="$(cat /etc/hysteria/marina-hy2-password)"
+          else
+            HY2PASS="$(openssl rand -hex 16)"
+            echo "$HY2PASS" > /etc/hysteria/marina-hy2-password
+            chmod 600 /etc/hysteria/marina-hy2-password
+          fi
+
+          openssl req -x509 -nodes -newkey rsa:2048 \
+            -keyout /etc/hysteria/server.key \
+            -out /etc/hysteria/server.crt \
+            -subj "/CN=www.bing.com" \
+            -days 3650
+
+          cat > /etc/hysteria/config.yaml <<EOF
+          listen: :443
+
+          tls:
+            cert: /etc/hysteria/server.crt
+            key: /etc/hysteria/server.key
+
+          auth:
+            type: password
+            password: "$HY2PASS"
+
+          masquerade:
+            type: proxy
+            proxy:
+              url: https://www.bing.com/
+              rewriteHost: true
+          EOF
+
+          iptables -I INPUT -p udp --dport 443 -j ACCEPT || true
+
+          if command -v ufw >/dev/null 2>&1; then
+            ufw allow 443/udp || true
+          fi
+
+          systemctl enable hysteria-server.service
+          systemctl restart hysteria-server.service
+
+          sleep 2
+
+          systemctl --no-pager --full status hysteria-server.service || true
+          ss -lunpt | grep ':443' || true
+
+          LINK="hysteria2://${HY2PASS}@${VPS_HOST}:443/?sni=www.bing.com&insecure=1#Marina-Aeza-Hysteria2"
+
+          echo "$LINK" > /root/marina-hysteria2-link.txt
+
+          echo "HY2_LINK_BEGIN"
+          echo "$LINK"
+          echo "HY2_LINK_END"
+REMOTE
