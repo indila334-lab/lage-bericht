@@ -1,4 +1,4 @@
-name: OpenClaw Claw Link
+name: Aeza AmneziaWG Setup
 
 on:
   workflow_dispatch:
@@ -7,12 +7,12 @@ on:
       - ".github/workflows/openclaw-claw-link.yml"
 
 jobs:
-  openclaw:
+  setup-amneziawg:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Diagnose OpenClaw on Aeza
+      - name: Test SSH to Aeza
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -26,21 +26,5 @@ jobs:
             echo "SSH_OK"
             whoami || true
             hostname || true
-            echo "PATH=$PATH"
-            echo "--- openclaw command ---"
-            command -v openclaw || true
-            openclaw --version || true
-            echo "--- /root/openclaw.txt ---"
-            cat /root/openclaw.txt || true
-            echo "--- /root files ---"
-            ls -la /root || true
-            echo "--- likely commands ---"
-            ls -la /usr/local/bin /usr/bin /opt 2>/dev/null | grep -i claw || true
-            echo "--- services ---"
-            systemctl list-units --type=service --all 2>/dev/null | grep -Ei 'claw|open' || true
-            echo "--- docker ---"
-            docker ps -a 2>/dev/null || true
-            echo "--- ports ---"
-            ss -lntp 2>/dev/null | grep -E '8000|18789' || true
-            echo "DIAG_DONE"
+            echo "AMNEZIAWG_TEST_READY"
             exit 0
