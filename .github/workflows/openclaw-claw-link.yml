@@ -82,24 +82,14 @@ jobs:
           fi
           echo "AWG_TOOLS_FOUND"
 
-          SERVER_PRIV_RAW="$($SUDO awk -F= '/^[[:space:]]*PrivateKey[[:space:]]*=/{print $2; exit}' "$SERVER_CFG")"
-          SERVER_PRIV="$(printf '%s\n' "$SERVER_PRIV_RAW" | sed 's/[#;].*$//' | xargs)"
+          SERVER_PRIV="$($SUDO sed -n 's/^[[:space:]]*PrivateKey[[:space:]]*=[[:space:]]*//p' "$SERVER_CFG" | head -n1 | tr -d '\r')"
           if [ -z "$SERVER_PRIV" ]; then
             echo "ERROR_SERVER_PRIVATE_KEY_NOT_FOUND"
             exit 1
           fi
-          echo "SERVER_PRIVATE_KEY_READ_AND_SANITIZED"
+          echo "SERVER_PRIVATE_KEY_READ"
 
-          set +e
-          SERVER_PUB="$(printf '%s' "$SERVER_PRIV" | awg pubkey 2>/dev/null)"
-          pub_rc=$?
-          set -e
-          if [ "$pub_rc" -ne 0 ] || [ -z "$SERVER_PUB" ]; then
-            echo "SERVER_PUBLIC_KEY_FROM_PRIVATE_FAILED_TRYING_AWG_SHOW"
-            if ip link show "$IFACE" >/dev/null 2>&1; then
-              SERVER_PUB="$($SUDO awg show "$IFACE" public-key 2>/dev/null || true)"
-            fi
-          fi
+          SERVER_PUB="$(printf '%s\n' "$SERVER_PRIV" | awg pubkey)"
           if [ -z "$SERVER_PUB" ]; then
             echo "ERROR_SERVER_PUBLIC_KEY_DERIVE_FAILED"
             exit 1
@@ -107,11 +97,11 @@ jobs:
           echo "SERVER_PUBLIC_KEY_READY"
 
           MAMA_PRIV="$(awg genkey)"
-          MAMA_PUB="$(printf '%s' "$MAMA_PRIV" | awg pubkey)"
+          MAMA_PUB="$(printf '%s\n' "$MAMA_PRIV" | awg pubkey)"
           MAMA_PSK="$(awg genpsk)"
 
           SISTER_PRIV="$(awg genkey)"
-          SISTER_PUB="$(printf '%s' "$SISTER_PRIV" | awg pubkey)"
+          SISTER_PUB="$(printf '%s\n' "$SISTER_PRIV" | awg pubkey)"
           SISTER_PSK="$(awg genpsk)"
           echo "CLIENT_KEYS_GENERATED"
 
