@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Install Claw Link and start gateway
+      - name: Diagnose OpenClaw on Aeza
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -19,16 +19,23 @@ jobs:
           timeout: 30s
           command_timeout: 8m
           script: |
-            set -e
-
-            echo "Installing Claw Link..."
-            openclaw plugins install @imlls/claw-link
-
-            echo "Starting OpenClaw gateway..."
-            pkill -f "openclaw gateway" || true
-            nohup openclaw gateway --force > /root/openclaw-gateway.log 2>&1 &
-
-            sleep 10
-
-            echo "Gateway log:"
-            cat /root/openclaw-gateway.log || true
+            set +e
+            echo "SSH_OK"
+            whoami
+            hostname
+            echo "PATH=$PATH"
+            echo "--- openclaw command ---"
+            command -v openclaw
+            openclaw --version
+            echo "--- /root/openclaw.txt ---"
+            cat /root/openclaw.txt
+            echo "--- /root files ---"
+            ls -la /root
+            echo "--- likely commands ---"
+            ls -la /usr/local/bin /usr/bin /opt 2>/dev/null | grep -i claw
+            echo "--- services ---"
+            systemctl list-units --type=service --all | grep -Ei 'claw|open' || true
+            echo "--- docker ---"
+            docker ps -a || true
+            echo "--- ports ---"
+            ss -lntp | grep -E '8000|18789' || true
