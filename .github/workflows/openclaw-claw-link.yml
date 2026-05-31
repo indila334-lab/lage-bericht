@@ -23,19 +23,37 @@ jobs:
           command_timeout: 15m
           script: |
             set -euo pipefail
+            export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 
             echo "SSH_OK"
             echo "MODE_SAFE_ADD_PEERS_ONLY"
 
-            SERVER_CFG="/etc/amneziawg/awg0.conf"
             VPN_PORT="443"
             ENDPOINT_HOST="${{ secrets.VPS_HOST }}"
+            IFACE="awg0"
+            SUDO=""
+            if [ "$(id -u)" -ne 0 ]; then
+              SUDO="sudo"
+            fi
 
-            if [ ! -f "$SERVER_CFG" ]; then
-              echo "ERROR_SERVER_CONFIG_NOT_FOUND: $SERVER_CFG"
+            SERVER_CFG=""
+            for candidate in /etc/amneziawg/awg0.conf /etc/wireguard/awg0.conf /etc/wireguard/wg0.conf; do
+              if $SUDO test -f "$candidate"; then
+                SERVER_CFG="$candidate"
+                break
+              fi
+            done
+
+            if [ -z "$SERVER_CFG" ]; then
+              SERVER_CFG="$($SUDO find /etc -maxdepth 3 -type f \( -name 'awg*.conf' -o -name 'wg*.conf' \) 2>/dev/null | head -n 1 || true)"
+            fi
+
+            if [ -z "$SERVER_CFG" ] || ! $SUDO test -f "$SERVER_CFG"; then
+              echo "ERROR_SERVER_CONFIG_NOT_FOUND"
               exit 1
             fi
             echo "SERVER_CONFIG_FOUND"
+            echo "SERVER_CONFIG_PATH=$SERVER_CFG"
 
             if ! command -v awg >/dev/null 2>&1; then
               echo "ERROR_AWG_NOT_FOUND"
@@ -47,7 +65,7 @@ jobs:
             fi
             echo "AWG_TOOLS_FOUND"
 
-            SERVER_PRIV="$(awk -F= '/^[[:space:]]*PrivateKey[[:space:]]*=/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$SERVER_CFG")"
+            SERVER_PRIV="$($SUDO awk -F= '/^[[:space:]]*PrivateKey[[:space:]]*=/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$SERVER_CFG")"
             if [ -z "$SERVER_PRIV" ]; then
               echo "ERROR_SERVER_PRIVATE_KEY_NOT_FOUND"
               exit 1
@@ -71,19 +89,19 @@ jobs:
             echo "CLIENT_KEYS_GENERATED"
 
             BACKUP="$SERVER_CFG.backup-family-$(date -u +%Y%m%d-%H%M%S)"
-            cp -a "$SERVER_CFG" "$BACKUP"
-            chmod 600 "$BACKUP"
-            echo "SERVER_CONFIG_BACKED_UP: $BACKUP"
+            $SUDO cp -a "$SERVER_CFG" "$BACKUP"
+            $SUDO chmod 600 "$BACKUP"
+            echo "SERVER_CONFIG_BACKED_UP"
 
             TMP_CFG="$(mktemp)"
-            awk '
+            $SUDO awk '
               /^# BEGIN FAMILY_MAMA$/ { skip=1; next }
               /^# END FAMILY_MAMA$/ { skip=0; next }
               /^# BEGIN FAMILY_SISTER$/ { skip=1; next }
               /^# END FAMILY_SISTER$/ { skip=0; next }
               skip != 1 { print }
             ' "$SERVER_CFG" > "$TMP_CFG"
-            cat "$TMP_CFG" > "$SERVER_CFG"
+            $SUDO cp "$TMP_CFG" "$SERVER_CFG"
             rm -f "$TMP_CFG"
 
             {
@@ -101,28 +119,28 @@ jobs:
               printf '%s\n' "PresharedKey = $SISTER_PSK"
               printf '%s\n' "AllowedIPs = 10.66.66.4/32"
               printf '%s\n' "# END FAMILY_SISTER"
-            } >> "$SERVER_CFG"
-            chmod 600 "$SERVER_CFG"
+            } | $SUDO tee -a "$SERVER_CFG" >/dev/null
+            $SUDO chmod 600 "$SERVER_CFG"
             echo "FAMILY_PEERS_WRITTEN"
 
             TMP_STRIP="$(mktemp)"
-            if ip link show awg0 >/dev/null 2>&1; then
-              if awg-quick strip "$SERVER_CFG" > "$TMP_STRIP" && awg syncconf awg0 "$TMP_STRIP"; then
+            if ip link show "$IFACE" >/dev/null 2>&1; then
+              if $SUDO awg-quick strip "$SERVER_CFG" > "$TMP_STRIP" && $SUDO awg syncconf "$IFACE" "$TMP_STRIP"; then
                 echo "AWG_SYNCCONF_OK"
               else
                 echo "AWG_SYNCCONF_FAILED_TRYING_DOWN_UP"
-                awg-quick down "$SERVER_CFG" || true
-                awg-quick up "$SERVER_CFG"
+                $SUDO awg-quick down "$SERVER_CFG" || true
+                $SUDO awg-quick up "$SERVER_CFG"
                 echo "AWG_DOWN_UP_OK"
               fi
             else
               echo "AWG0_NOT_RUNNING_TRYING_UP"
-              awg-quick up "$SERVER_CFG"
+              $SUDO awg-quick up "$SERVER_CFG"
               echo "AWG_UP_OK"
             fi
             rm -f "$TMP_STRIP"
 
-            awg show awg0 >/dev/null
+            $SUDO awg show "$IFACE" >/dev/null
             echo "AWG0_SHOW_OK"
 
             echo "========== MAMA_AMNEZIAWG_CONFIG_START =========="
