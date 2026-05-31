@@ -1,4 +1,4 @@
-name: Aeza AmneziaWG Setup
+name: Aeza AmneziaWG Package Check
 
 on:
   workflow_dispatch:
@@ -7,12 +7,12 @@ on:
       - ".github/workflows/openclaw-claw-link.yml"
 
 jobs:
-  setup-amneziawg:
+  check-amneziawg:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
-      - name: Test SSH to Aeza
+      - name: Check AmneziaWG package on Aeza
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -20,11 +20,31 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           port: 22
           timeout: 30s
-          command_timeout: 8m
+          command_timeout: 12m
           script: |
             set +e
             echo "SSH_OK"
-            whoami || true
-            hostname || true
-            echo "AMNEZIAWG_TEST_READY"
+            whoami
+            hostname
+            uname -a
+
+            echo "--- apt update ---"
+            apt-get update
+
+            echo "--- install helper packages ---"
+            DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common python3-launchpadlib gnupg2 curl ca-certificates
+
+            echo "--- add Amnezia PPA ---"
+            add-apt-repository -y ppa:amnezia/ppa
+
+            echo "--- apt update after PPA ---"
+            apt-get update
+
+            echo "--- search amnezia packages ---"
+            apt-cache search amnezia | head -50
+
+            echo "--- policy amneziawg ---"
+            apt-cache policy amneziawg
+
+            echo "AMNEZIAWG_PACKAGE_CHECK_DONE"
             exit 0
