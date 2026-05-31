@@ -1,4 +1,4 @@
-name: Aeza AmneziaWG Package Check
+name: Aeza AmneziaWG Install
 
 on:
   workflow_dispatch:
@@ -7,12 +7,12 @@ on:
       - ".github/workflows/openclaw-claw-link.yml"
 
 jobs:
-  check-amneziawg:
+  install-amneziawg:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
-      - name: Check AmneziaWG package on Aeza
+      - name: Install AmneziaWG on Aeza
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -20,31 +20,112 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           port: 22
           timeout: 30s
-          command_timeout: 12m
+          command_timeout: 25m
           script: |
-            set +e
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+
             echo "SSH_OK"
-            whoami
-            hostname
-            uname -a
 
-            echo "--- apt update ---"
+            SERVER_IP="91.184.242.59"
+            VPN_PORT="443"
+            CFG_DIR="/etc/amneziawg"
+            SERVER_CFG="$CFG_DIR/awg0.conf"
+            CLIENT_CFG="/root/amneziawg-client.conf"
+
             apt-get update
+            apt-get install -y amneziawg iptables qrencode
 
-            echo "--- install helper packages ---"
-            DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common python3-launchpadlib gnupg2 curl ca-certificates
+            command -v awg
+            command -v awg-quick
 
-            echo "--- add Amnezia PPA ---"
-            add-apt-repository -y ppa:amnezia/ppa
+            install -d -m 700 "$CFG_DIR"
+            umask 077
 
-            echo "--- apt update after PPA ---"
-            apt-get update
+            SERVER_PRIV="$(awg genkey)"
+            SERVER_PUB="$(printf '%s' "$SERVER_PRIV" | awg pubkey)"
+            CLIENT_PRIV="$(awg genkey)"
+            CLIENT_PUB="$(printf '%s' "$CLIENT_PRIV" | awg pubkey)"
+            PSK="$(awg genpsk)"
+            IFACE="$(ip route show default | awk '{print $5; exit}')"
 
-            echo "--- search amnezia packages ---"
-            apt-cache search amnezia | head -50
+            sysctl -w net.ipv4.ip_forward=1
+            printf 'net.ipv4.ip_forward=1\n' > /etc/sysctl.d/99-amneziawg.conf
 
-            echo "--- policy amneziawg ---"
-            apt-cache policy amneziawg
+            cat > "$SERVER_CFG" <<EOF
+            [Interface]
+            Address = 10.66.66.1/24
+            ListenPort = $VPN_PORT
+            PrivateKey = $SERVER_PRIV
+            Jc = 8
+            Jmin = 8
+            Jmax = 80
+            S1 = 44
+            S2 = 105
+            H1 = 1206364837
+            H2 = 1849372711
+            H3 = 1948428175
+            H4 = 395628712
+            PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -s 10.66.66.0/24 -o $IFACE -j MASQUERADE
+            PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.66.66.0/24 -o $IFACE -j MASQUERADE
 
-            echo "AMNEZIAWG_PACKAGE_CHECK_DONE"
-            exit 0
+            [Peer]
+            PublicKey = $CLIENT_PUB
+            PresharedKey = $PSK
+            AllowedIPs = 10.66.66.2/32
+            EOF
+            sed -i 's/^            //' "$SERVER_CFG"
+            chmod 600 "$SERVER_CFG"
+
+            cat > "$CLIENT_CFG" <<EOF
+            [Interface]
+            PrivateKey = $CLIENT_PRIV
+            Address = 10.66.66.2/32
+            DNS = 1.1.1.1, 8.8.8.8
+            Jc = 8
+            Jmin = 8
+            Jmax = 80
+            S1 = 44
+            S2 = 105
+            H1 = 1206364837
+            H2 = 1849372711
+            H3 = 1948428175
+            H4 = 395628712
+
+            [Peer]
+            PublicKey = $SERVER_PUB
+            PresharedKey = $PSK
+            AllowedIPs = 0.0.0.0/0, ::/0
+            Endpoint = $SERVER_IP:$VPN_PORT
+            PersistentKeepalive = 25
+            EOF
+            sed -i 's/^            //' "$CLIENT_CFG"
+            chmod 600 "$CLIENT_CFG"
+
+            awg-quick down "$SERVER_CFG" || true
+            awg-quick up "$SERVER_CFG"
+
+            cat > /etc/systemd/system/amneziawg-awg0.service <<EOF
+            [Unit]
+            Description=AmneziaWG awg0
+            After=network-online.target
+            Wants=network-online.target
+
+            [Service]
+            Type=oneshot
+            RemainAfterExit=yes
+            ExecStart=/usr/bin/awg-quick up $SERVER_CFG
+            ExecStop=/usr/bin/awg-quick down $SERVER_CFG
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+            sed -i 's/^            //' /etc/systemd/system/amneziawg-awg0.service
+
+            systemctl daemon-reload
+            systemctl enable amneziawg-awg0.service
+
+            echo "========== AMNEZIAWG_CLIENT_CONFIG_START =========="
+            cat "$CLIENT_CFG"
+            echo "========== AMNEZIAWG_CLIENT_CONFIG_END =========="
+            echo "DONE_AMNEZIAWG"
