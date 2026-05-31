@@ -1,4 +1,4 @@
-name: Aeza AmneziaWG Install
+name: Aeza AmneziaWG Add Family Clients
 
 on:
   workflow_dispatch:
@@ -7,12 +7,12 @@ on:
       - ".github/workflows/openclaw-claw-link.yml"
 
 jobs:
-  install-amneziawg:
+  add-family-clients:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
-      - name: Install AmneziaWG on Aeza
+      - name: Add mama and sister AmneziaWG peers on Aeza
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -20,112 +20,152 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           port: 22
           timeout: 30s
-          command_timeout: 25m
+          command_timeout: 15m
           script: |
-            set -e
-            export DEBIAN_FRONTEND=noninteractive
+            set -euo pipefail
 
             echo "SSH_OK"
+            echo "MODE_SAFE_ADD_PEERS_ONLY"
 
-            SERVER_IP="91.184.242.59"
+            SERVER_CFG="/etc/amneziawg/awg0.conf"
             VPN_PORT="443"
-            CFG_DIR="/etc/amneziawg"
-            SERVER_CFG="$CFG_DIR/awg0.conf"
-            CLIENT_CFG="/root/amneziawg-client.conf"
+            ENDPOINT_HOST="${{ secrets.VPS_HOST }}"
 
-            apt-get update
-            apt-get install -y amneziawg iptables qrencode
+            if [ ! -f "$SERVER_CFG" ]; then
+              echo "ERROR_SERVER_CONFIG_NOT_FOUND: $SERVER_CFG"
+              exit 1
+            fi
+            echo "SERVER_CONFIG_FOUND"
 
-            command -v awg
-            command -v awg-quick
+            command -v awg >/dev/null
+            command -v awg-quick >/dev/null
+            echo "AWG_TOOLS_FOUND"
 
-            install -d -m 700 "$CFG_DIR"
-            umask 077
+            SERVER_PRIV="$(awk -F= '/^[[:space:]]*PrivateKey[[:space:]]*=/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$SERVER_CFG")"
+            if [ -z "$SERVER_PRIV" ]; then
+              echo "ERROR_SERVER_PRIVATE_KEY_NOT_FOUND"
+              exit 1
+            fi
+            echo "SERVER_PRIVATE_KEY_READ"
 
-            SERVER_PRIV="$(awg genkey)"
             SERVER_PUB="$(printf '%s' "$SERVER_PRIV" | awg pubkey)"
-            CLIENT_PRIV="$(awg genkey)"
-            CLIENT_PUB="$(printf '%s' "$CLIENT_PRIV" | awg pubkey)"
-            PSK="$(awg genpsk)"
-            IFACE="$(ip route show default | awk '{print $5; exit}')"
+            if [ -z "$SERVER_PUB" ]; then
+              echo "ERROR_SERVER_PUBLIC_KEY_DERIVE_FAILED"
+              exit 1
+            fi
+            echo "SERVER_PUBLIC_KEY_DERIVED"
 
-            sysctl -w net.ipv4.ip_forward=1
-            printf 'net.ipv4.ip_forward=1\n' > /etc/sysctl.d/99-amneziawg.conf
+            MAMA_PRIV="$(awg genkey)"
+            MAMA_PUB="$(printf '%s' "$MAMA_PRIV" | awg pubkey)"
+            MAMA_PSK="$(awg genpsk)"
 
-            cat > "$SERVER_CFG" <<EOF
-            [Interface]
-            Address = 10.66.66.1/24
-            ListenPort = $VPN_PORT
-            PrivateKey = $SERVER_PRIV
-            Jc = 8
-            Jmin = 8
-            Jmax = 80
-            S1 = 44
-            S2 = 105
-            H1 = 1206364837
-            H2 = 1849372711
-            H3 = 1948428175
-            H4 = 395628712
-            PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -s 10.66.66.0/24 -o $IFACE -j MASQUERADE
-            PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.66.66.0/24 -o $IFACE -j MASQUERADE
+            SISTER_PRIV="$(awg genkey)"
+            SISTER_PUB="$(printf '%s' "$SISTER_PRIV" | awg pubkey)"
+            SISTER_PSK="$(awg genpsk)"
 
-            [Peer]
-            PublicKey = $CLIENT_PUB
-            PresharedKey = $PSK
-            AllowedIPs = 10.66.66.2/32
-            EOF
-            sed -i 's/^            //' "$SERVER_CFG"
+            BACKUP="$SERVER_CFG.backup-family-$(date -u +%Y%m%d-%H%M%S)"
+            cp -a "$SERVER_CFG" "$BACKUP"
+            chmod 600 "$BACKUP"
+            echo "SERVER_CONFIG_BACKED_UP"
+
+            TMP_CFG="$(mktemp)"
+            awk '
+              /^# BEGIN FAMILY_MAMA$/ { skip=1; next }
+              /^# END FAMILY_MAMA$/ { skip=0; next }
+              /^# BEGIN FAMILY_SISTER$/ { skip=1; next }
+              /^# END FAMILY_SISTER$/ { skip=0; next }
+              skip != 1 { print }
+            ' "$SERVER_CFG" > "$TMP_CFG"
+            cat "$TMP_CFG" > "$SERVER_CFG"
+            rm -f "$TMP_CFG"
+
+            cat >> "$SERVER_CFG" <<EOF
+
+# BEGIN FAMILY_MAMA
+[Peer]
+PublicKey = $MAMA_PUB
+PresharedKey = $MAMA_PSK
+AllowedIPs = 10.66.66.3/32
+# END FAMILY_MAMA
+
+# BEGIN FAMILY_SISTER
+[Peer]
+PublicKey = $SISTER_PUB
+PresharedKey = $SISTER_PSK
+AllowedIPs = 10.66.66.4/32
+# END FAMILY_SISTER
+EOF
             chmod 600 "$SERVER_CFG"
+            echo "FAMILY_PEERS_WRITTEN"
 
-            cat > "$CLIENT_CFG" <<EOF
-            [Interface]
-            PrivateKey = $CLIENT_PRIV
-            Address = 10.66.66.2/32
-            DNS = 1.1.1.1, 8.8.8.8
-            Jc = 8
-            Jmin = 8
-            Jmax = 80
-            S1 = 44
-            S2 = 105
-            H1 = 1206364837
-            H2 = 1849372711
-            H3 = 1948428175
-            H4 = 395628712
+            TMP_STRIP="$(mktemp)"
+            if ip link show awg0 >/dev/null 2>&1; then
+              if awg-quick strip "$SERVER_CFG" > "$TMP_STRIP" && awg syncconf awg0 "$TMP_STRIP"; then
+                echo "AWG_SYNCCONF_OK"
+              else
+                echo "AWG_SYNCCONF_FAILED_TRYING_DOWN_UP"
+                awg-quick down "$SERVER_CFG" || true
+                awg-quick up "$SERVER_CFG"
+                echo "AWG_DOWN_UP_OK"
+              fi
+            else
+              echo "AWG0_NOT_RUNNING_TRYING_UP"
+              awg-quick up "$SERVER_CFG"
+              echo "AWG_UP_OK"
+            fi
+            rm -f "$TMP_STRIP"
 
-            [Peer]
-            PublicKey = $SERVER_PUB
-            PresharedKey = $PSK
-            AllowedIPs = 0.0.0.0/0, ::/0
-            Endpoint = $SERVER_IP:$VPN_PORT
-            PersistentKeepalive = 25
-            EOF
-            sed -i 's/^            //' "$CLIENT_CFG"
-            chmod 600 "$CLIENT_CFG"
+            awg show awg0 >/dev/null
+            echo "AWG0_SHOW_OK"
 
-            awg-quick down "$SERVER_CFG" || true
-            awg-quick up "$SERVER_CFG"
+            echo "========== MAMA_AMNEZIAWG_CONFIG_START =========="
+            cat <<EOF
+[Interface]
+PrivateKey = $MAMA_PRIV
+Address = 10.66.66.3/32
+DNS = 1.1.1.1, 8.8.8.8
+Jc = 8
+Jmin = 8
+Jmax = 80
+S1 = 44
+S2 = 105
+H1 = 1206364837
+H2 = 1849372711
+H3 = 1948428175
+H4 = 395628712
 
-            cat > /etc/systemd/system/amneziawg-awg0.service <<EOF
-            [Unit]
-            Description=AmneziaWG awg0
-            After=network-online.target
-            Wants=network-online.target
+[Peer]
+PublicKey = $SERVER_PUB
+PresharedKey = $MAMA_PSK
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = $ENDPOINT_HOST:$VPN_PORT
+PersistentKeepalive = 25
+EOF
+            echo "========== MAMA_AMNEZIAWG_CONFIG_END =========="
 
-            [Service]
-            Type=oneshot
-            RemainAfterExit=yes
-            ExecStart=/usr/bin/awg-quick up $SERVER_CFG
-            ExecStop=/usr/bin/awg-quick down $SERVER_CFG
+            echo "========== SISTER_AMNEZIAWG_CONFIG_START =========="
+            cat <<EOF
+[Interface]
+PrivateKey = $SISTER_PRIV
+Address = 10.66.66.4/32
+DNS = 1.1.1.1, 8.8.8.8
+Jc = 8
+Jmin = 8
+Jmax = 80
+S1 = 44
+S2 = 105
+H1 = 1206364837
+H2 = 1849372711
+H3 = 1948428175
+H4 = 395628712
 
-            [Install]
-            WantedBy=multi-user.target
-            EOF
-            sed -i 's/^            //' /etc/systemd/system/amneziawg-awg0.service
+[Peer]
+PublicKey = $SERVER_PUB
+PresharedKey = $SISTER_PSK
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = $ENDPOINT_HOST:$VPN_PORT
+PersistentKeepalive = 25
+EOF
+            echo "========== SISTER_AMNEZIAWG_CONFIG_END =========="
 
-            systemctl daemon-reload
-            systemctl enable amneziawg-awg0.service
-
-            echo "========== AMNEZIAWG_CLIENT_CONFIG_START =========="
-            cat "$CLIENT_CFG"
-            echo "========== AMNEZIAWG_CLIENT_CONFIG_END =========="
-            echo "DONE_AMNEZIAWG"
+            echo "DONE_FAMILY_CLIENTS"
