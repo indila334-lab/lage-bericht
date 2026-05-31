@@ -6,187 +6,254 @@ on:
     paths:
       - ".github/workflows/openclaw-claw-link.yml"
 
+permissions:
+  contents: write
+
 jobs:
   add-family-clients:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
+      - name: Checkout memory repo
+        uses: actions/checkout@v4
+
       - name: Add mama and sister AmneziaWG peers on Aeza
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
-          port: 22
-          timeout: 30s
-          command_timeout: 15m
-          script: |
-            set -euo pipefail
-            export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+        id: add_family
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          set -u
+          mkdir -p notes
+          : > family-run.log
+          status=0
 
-            echo "SSH_OK"
-            echo "MODE_SAFE_ADD_PEERS_ONLY"
+          echo "LOCAL_WORKFLOW_OK" | tee -a family-run.log
+          echo "MODE_SAFE_ADD_PEERS_ONLY" | tee -a family-run.log
 
-            VPN_PORT="443"
-            ENDPOINT_HOST="${{ secrets.VPS_HOST }}"
-            IFACE="awg0"
-            SUDO=""
-            if [ "$(id -u)" -ne 0 ]; then
-              SUDO="sudo"
+          sudo apt-get update >> family-run.log 2>&1 || status=$?
+          if [ "$status" -eq 0 ]; then
+            sudo apt-get install -y sshpass >> family-run.log 2>&1 || status=$?
+          fi
+
+          cat > remote-family-clients.sh <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+          echo "SSH_OK"
+          echo "REMOTE_MODE_SAFE_ADD_PEERS_ONLY"
+
+          VPN_PORT="443"
+          IFACE="awg0"
+          ENDPOINT_HOST="${ENDPOINT_HOST:?ENDPOINT_HOST missing}"
+          SUDO=""
+          if [ "$(id -u)" -ne 0 ]; then
+            SUDO="sudo"
+          fi
+
+          SERVER_CFG=""
+          for candidate in /etc/amneziawg/awg0.conf /etc/wireguard/awg0.conf /etc/wireguard/wg0.conf; do
+            if $SUDO test -f "$candidate"; then
+              SERVER_CFG="$candidate"
+              break
             fi
+          done
 
-            SERVER_CFG=""
-            for candidate in /etc/amneziawg/awg0.conf /etc/wireguard/awg0.conf /etc/wireguard/wg0.conf; do
-              if $SUDO test -f "$candidate"; then
-                SERVER_CFG="$candidate"
-                break
-              fi
-            done
+          if [ -z "$SERVER_CFG" ]; then
+            SERVER_CFG="$($SUDO find /etc -maxdepth 3 -type f \( -name 'awg*.conf' -o -name 'wg*.conf' \) 2>/dev/null | head -n 1 || true)"
+          fi
 
-            if [ -z "$SERVER_CFG" ]; then
-              SERVER_CFG="$($SUDO find /etc -maxdepth 3 -type f \( -name 'awg*.conf' -o -name 'wg*.conf' \) 2>/dev/null | head -n 1 || true)"
-            fi
+          if [ -z "$SERVER_CFG" ] || ! $SUDO test -f "$SERVER_CFG"; then
+            echo "ERROR_SERVER_CONFIG_NOT_FOUND"
+            exit 1
+          fi
+          echo "SERVER_CONFIG_FOUND"
+          echo "SERVER_CONFIG_PATH=$SERVER_CFG"
 
-            if [ -z "$SERVER_CFG" ] || ! $SUDO test -f "$SERVER_CFG"; then
-              echo "ERROR_SERVER_CONFIG_NOT_FOUND"
-              exit 1
-            fi
-            echo "SERVER_CONFIG_FOUND"
-            echo "SERVER_CONFIG_PATH=$SERVER_CFG"
+          if ! command -v awg >/dev/null 2>&1; then
+            echo "ERROR_AWG_NOT_FOUND"
+            exit 1
+          fi
+          if ! command -v awg-quick >/dev/null 2>&1; then
+            echo "ERROR_AWG_QUICK_NOT_FOUND"
+            exit 1
+          fi
+          echo "AWG_TOOLS_FOUND"
 
-            if ! command -v awg >/dev/null 2>&1; then
-              echo "ERROR_AWG_NOT_FOUND"
-              exit 1
-            fi
-            if ! command -v awg-quick >/dev/null 2>&1; then
-              echo "ERROR_AWG_QUICK_NOT_FOUND"
-              exit 1
-            fi
-            echo "AWG_TOOLS_FOUND"
+          SERVER_PRIV="$($SUDO awk -F= '/^[[:space:]]*PrivateKey[[:space:]]*=/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$SERVER_CFG")"
+          if [ -z "$SERVER_PRIV" ]; then
+            echo "ERROR_SERVER_PRIVATE_KEY_NOT_FOUND"
+            exit 1
+          fi
+          echo "SERVER_PRIVATE_KEY_READ"
 
-            SERVER_PRIV="$($SUDO awk -F= '/^[[:space:]]*PrivateKey[[:space:]]*=/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$SERVER_CFG")"
-            if [ -z "$SERVER_PRIV" ]; then
-              echo "ERROR_SERVER_PRIVATE_KEY_NOT_FOUND"
-              exit 1
-            fi
-            echo "SERVER_PRIVATE_KEY_READ"
+          SERVER_PUB="$(printf '%s' "$SERVER_PRIV" | awg pubkey)"
+          if [ -z "$SERVER_PUB" ]; then
+            echo "ERROR_SERVER_PUBLIC_KEY_DERIVE_FAILED"
+            exit 1
+          fi
+          echo "SERVER_PUBLIC_KEY_DERIVED"
 
-            SERVER_PUB="$(printf '%s' "$SERVER_PRIV" | awg pubkey)"
-            if [ -z "$SERVER_PUB" ]; then
-              echo "ERROR_SERVER_PUBLIC_KEY_DERIVE_FAILED"
-              exit 1
-            fi
-            echo "SERVER_PUBLIC_KEY_DERIVED"
+          MAMA_PRIV="$(awg genkey)"
+          MAMA_PUB="$(printf '%s' "$MAMA_PRIV" | awg pubkey)"
+          MAMA_PSK="$(awg genpsk)"
 
-            MAMA_PRIV="$(awg genkey)"
-            MAMA_PUB="$(printf '%s' "$MAMA_PRIV" | awg pubkey)"
-            MAMA_PSK="$(awg genpsk)"
+          SISTER_PRIV="$(awg genkey)"
+          SISTER_PUB="$(printf '%s' "$SISTER_PRIV" | awg pubkey)"
+          SISTER_PSK="$(awg genpsk)"
+          echo "CLIENT_KEYS_GENERATED"
 
-            SISTER_PRIV="$(awg genkey)"
-            SISTER_PUB="$(printf '%s' "$SISTER_PRIV" | awg pubkey)"
-            SISTER_PSK="$(awg genpsk)"
-            echo "CLIENT_KEYS_GENERATED"
+          BACKUP="$SERVER_CFG.backup-family-$(date -u +%Y%m%d-%H%M%S)"
+          $SUDO cp -a "$SERVER_CFG" "$BACKUP"
+          $SUDO chmod 600 "$BACKUP"
+          echo "SERVER_CONFIG_BACKED_UP"
 
-            BACKUP="$SERVER_CFG.backup-family-$(date -u +%Y%m%d-%H%M%S)"
-            $SUDO cp -a "$SERVER_CFG" "$BACKUP"
-            $SUDO chmod 600 "$BACKUP"
-            echo "SERVER_CONFIG_BACKED_UP"
+          TMP_CFG="$(mktemp)"
+          $SUDO awk '
+            /^# BEGIN FAMILY_MAMA$/ { skip=1; next }
+            /^# END FAMILY_MAMA$/ { skip=0; next }
+            /^# BEGIN FAMILY_SISTER$/ { skip=1; next }
+            /^# END FAMILY_SISTER$/ { skip=0; next }
+            skip != 1 { print }
+          ' "$SERVER_CFG" > "$TMP_CFG"
+          $SUDO cp "$TMP_CFG" "$SERVER_CFG"
+          rm -f "$TMP_CFG"
 
-            TMP_CFG="$(mktemp)"
-            $SUDO awk '
-              /^# BEGIN FAMILY_MAMA$/ { skip=1; next }
-              /^# END FAMILY_MAMA$/ { skip=0; next }
-              /^# BEGIN FAMILY_SISTER$/ { skip=1; next }
-              /^# END FAMILY_SISTER$/ { skip=0; next }
-              skip != 1 { print }
-            ' "$SERVER_CFG" > "$TMP_CFG"
-            $SUDO cp "$TMP_CFG" "$SERVER_CFG"
-            rm -f "$TMP_CFG"
-
-            {
-              printf '\n'
-              printf '%s\n' "# BEGIN FAMILY_MAMA"
-              printf '%s\n' "[Peer]"
-              printf '%s\n' "PublicKey = $MAMA_PUB"
-              printf '%s\n' "PresharedKey = $MAMA_PSK"
-              printf '%s\n' "AllowedIPs = 10.66.66.3/32"
-              printf '%s\n' "# END FAMILY_MAMA"
-              printf '\n'
-              printf '%s\n' "# BEGIN FAMILY_SISTER"
-              printf '%s\n' "[Peer]"
-              printf '%s\n' "PublicKey = $SISTER_PUB"
-              printf '%s\n' "PresharedKey = $SISTER_PSK"
-              printf '%s\n' "AllowedIPs = 10.66.66.4/32"
-              printf '%s\n' "# END FAMILY_SISTER"
-            } | $SUDO tee -a "$SERVER_CFG" >/dev/null
-            $SUDO chmod 600 "$SERVER_CFG"
-            echo "FAMILY_PEERS_WRITTEN"
-
-            TMP_STRIP="$(mktemp)"
-            if ip link show "$IFACE" >/dev/null 2>&1; then
-              if $SUDO awg-quick strip "$SERVER_CFG" > "$TMP_STRIP" && $SUDO awg syncconf "$IFACE" "$TMP_STRIP"; then
-                echo "AWG_SYNCCONF_OK"
-              else
-                echo "AWG_SYNCCONF_FAILED_TRYING_DOWN_UP"
-                $SUDO awg-quick down "$SERVER_CFG" || true
-                $SUDO awg-quick up "$SERVER_CFG"
-                echo "AWG_DOWN_UP_OK"
-              fi
-            else
-              echo "AWG0_NOT_RUNNING_TRYING_UP"
-              $SUDO awg-quick up "$SERVER_CFG"
-              echo "AWG_UP_OK"
-            fi
-            rm -f "$TMP_STRIP"
-
-            $SUDO awg show "$IFACE" >/dev/null
-            echo "AWG0_SHOW_OK"
-
-            echo "========== MAMA_AMNEZIAWG_CONFIG_START =========="
-            printf '%s\n' "[Interface]"
-            printf '%s\n' "PrivateKey = $MAMA_PRIV"
-            printf '%s\n' "Address = 10.66.66.3/32"
-            printf '%s\n' "DNS = 1.1.1.1, 8.8.8.8"
-            printf '%s\n' "Jc = 8"
-            printf '%s\n' "Jmin = 8"
-            printf '%s\n' "Jmax = 80"
-            printf '%s\n' "S1 = 44"
-            printf '%s\n' "S2 = 105"
-            printf '%s\n' "H1 = 1206364837"
-            printf '%s\n' "H2 = 1849372711"
-            printf '%s\n' "H3 = 1948428175"
-            printf '%s\n' "H4 = 395628712"
+          {
             printf '\n'
+            printf '%s\n' "# BEGIN FAMILY_MAMA"
             printf '%s\n' "[Peer]"
-            printf '%s\n' "PublicKey = $SERVER_PUB"
+            printf '%s\n' "PublicKey = $MAMA_PUB"
             printf '%s\n' "PresharedKey = $MAMA_PSK"
-            printf '%s\n' "AllowedIPs = 0.0.0.0/0, ::/0"
-            printf '%s\n' "Endpoint = $ENDPOINT_HOST:$VPN_PORT"
-            printf '%s\n' "PersistentKeepalive = 25"
-            echo "========== MAMA_AMNEZIAWG_CONFIG_END =========="
-
-            echo "========== SISTER_AMNEZIAWG_CONFIG_START =========="
-            printf '%s\n' "[Interface]"
-            printf '%s\n' "PrivateKey = $SISTER_PRIV"
-            printf '%s\n' "Address = 10.66.66.4/32"
-            printf '%s\n' "DNS = 1.1.1.1, 8.8.8.8"
-            printf '%s\n' "Jc = 8"
-            printf '%s\n' "Jmin = 8"
-            printf '%s\n' "Jmax = 80"
-            printf '%s\n' "S1 = 44"
-            printf '%s\n' "S2 = 105"
-            printf '%s\n' "H1 = 1206364837"
-            printf '%s\n' "H2 = 1849372711"
-            printf '%s\n' "H3 = 1948428175"
-            printf '%s\n' "H4 = 395628712"
+            printf '%s\n' "AllowedIPs = 10.66.66.3/32"
+            printf '%s\n' "# END FAMILY_MAMA"
             printf '\n'
+            printf '%s\n' "# BEGIN FAMILY_SISTER"
             printf '%s\n' "[Peer]"
-            printf '%s\n' "PublicKey = $SERVER_PUB"
+            printf '%s\n' "PublicKey = $SISTER_PUB"
             printf '%s\n' "PresharedKey = $SISTER_PSK"
-            printf '%s\n' "AllowedIPs = 0.0.0.0/0, ::/0"
-            printf '%s\n' "Endpoint = $ENDPOINT_HOST:$VPN_PORT"
-            printf '%s\n' "PersistentKeepalive = 25"
-            echo "========== SISTER_AMNEZIAWG_CONFIG_END =========="
+            printf '%s\n' "AllowedIPs = 10.66.66.4/32"
+            printf '%s\n' "# END FAMILY_SISTER"
+          } | $SUDO tee -a "$SERVER_CFG" >/dev/null
+          $SUDO chmod 600 "$SERVER_CFG"
+          echo "FAMILY_PEERS_WRITTEN"
 
-            echo "DONE_FAMILY_CLIENTS"
+          TMP_STRIP="$(mktemp)"
+          if ip link show "$IFACE" >/dev/null 2>&1; then
+            if $SUDO awg-quick strip "$SERVER_CFG" > "$TMP_STRIP" && $SUDO awg syncconf "$IFACE" "$TMP_STRIP"; then
+              echo "AWG_SYNCCONF_OK"
+            else
+              echo "AWG_SYNCCONF_FAILED_TRYING_DOWN_UP"
+              $SUDO awg-quick down "$SERVER_CFG" || true
+              $SUDO awg-quick up "$SERVER_CFG"
+              echo "AWG_DOWN_UP_OK"
+            fi
+          else
+            echo "AWG0_NOT_RUNNING_TRYING_UP"
+            $SUDO awg-quick up "$SERVER_CFG"
+            echo "AWG_UP_OK"
+          fi
+          rm -f "$TMP_STRIP"
+
+          $SUDO awg show "$IFACE" >/dev/null
+          echo "AWG0_SHOW_OK"
+
+          echo "========== MAMA_AMNEZIAWG_CONFIG_START =========="
+          printf '%s\n' "[Interface]"
+          printf '%s\n' "PrivateKey = $MAMA_PRIV"
+          printf '%s\n' "Address = 10.66.66.3/32"
+          printf '%s\n' "DNS = 1.1.1.1, 8.8.8.8"
+          printf '%s\n' "Jc = 8"
+          printf '%s\n' "Jmin = 8"
+          printf '%s\n' "Jmax = 80"
+          printf '%s\n' "S1 = 44"
+          printf '%s\n' "S2 = 105"
+          printf '%s\n' "H1 = 1206364837"
+          printf '%s\n' "H2 = 1849372711"
+          printf '%s\n' "H3 = 1948428175"
+          printf '%s\n' "H4 = 395628712"
+          printf '\n'
+          printf '%s\n' "[Peer]"
+          printf '%s\n' "PublicKey = $SERVER_PUB"
+          printf '%s\n' "PresharedKey = $MAMA_PSK"
+          printf '%s\n' "AllowedIPs = 0.0.0.0/0, ::/0"
+          printf '%s\n' "Endpoint = $ENDPOINT_HOST:$VPN_PORT"
+          printf '%s\n' "PersistentKeepalive = 25"
+          echo "========== MAMA_AMNEZIAWG_CONFIG_END =========="
+
+          echo "========== SISTER_AMNEZIAWG_CONFIG_START =========="
+          printf '%s\n' "[Interface]"
+          printf '%s\n' "PrivateKey = $SISTER_PRIV"
+          printf '%s\n' "Address = 10.66.66.4/32"
+          printf '%s\n' "DNS = 1.1.1.1, 8.8.8.8"
+          printf '%s\n' "Jc = 8"
+          printf '%s\n' "Jmin = 8"
+          printf '%s\n' "Jmax = 80"
+          printf '%s\n' "S1 = 44"
+          printf '%s\n' "S2 = 105"
+          printf '%s\n' "H1 = 1206364837"
+          printf '%s\n' "H2 = 1849372711"
+          printf '%s\n' "H3 = 1948428175"
+          printf '%s\n' "H4 = 395628712"
+          printf '\n'
+          printf '%s\n' "[Peer]"
+          printf '%s\n' "PublicKey = $SERVER_PUB"
+          printf '%s\n' "PresharedKey = $SISTER_PSK"
+          printf '%s\n' "AllowedIPs = 0.0.0.0/0, ::/0"
+          printf '%s\n' "Endpoint = $ENDPOINT_HOST:$VPN_PORT"
+          printf '%s\n' "PersistentKeepalive = 25"
+          echo "========== SISTER_AMNEZIAWG_CONFIG_END =========="
+
+          echo "DONE_FAMILY_CLIENTS"
+          REMOTE_SCRIPT
+
+          if [ "$status" -eq 0 ]; then
+            chmod 600 remote-family-clients.sh
+            set +e
+            SSHPASS="$VPS_PASSWORD" sshpass -e ssh \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=30 \
+              "$VPS_USER@$VPS_HOST" \
+              "ENDPOINT_HOST='$VPS_HOST' bash -s" \
+              < remote-family-clients.sh 2>&1 | tee -a family-run.log
+            status=${PIPESTATUS[0]}
+            set -u
+          fi
+
+          {
+            echo "# AmneziaWG family clients last run"
+            echo
+            echo "- UTC: $(date -u -Iseconds)"
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Exit code: $status"
+            echo
+            echo '```text'
+            awk '
+              /MAMA_AMNEZIAWG_CONFIG_START/ { print "[MAMA_CONFIG_REDACTED_IN_REPO_SEE_ACTION_LOG]"; skip=1; next }
+              /MAMA_AMNEZIAWG_CONFIG_END/ { skip=0; next }
+              /SISTER_AMNEZIAWG_CONFIG_START/ { print "[SISTER_CONFIG_REDACTED_IN_REPO_SEE_ACTION_LOG]"; skip=1; next }
+              /SISTER_AMNEZIAWG_CONFIG_END/ { skip=0; next }
+              skip != 1 { print }
+            ' family-run.log
+            echo '```'
+          } > notes/amneziawg-family-last-run.md
+
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Commit redacted family workflow status
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add notes/amneziawg-family-last-run.md
+          git commit -m "Record AmneziaWG family workflow status" || true
+          git push || true
+
+      - name: Fail if family workflow failed
+        if: steps.add_family.outputs.exit_code != '0'
+        run: exit 1
