@@ -37,8 +37,14 @@ jobs:
             fi
             echo "SERVER_CONFIG_FOUND"
 
-            command -v awg >/dev/null
-            command -v awg-quick >/dev/null
+            if ! command -v awg >/dev/null 2>&1; then
+              echo "ERROR_AWG_NOT_FOUND"
+              exit 1
+            fi
+            if ! command -v awg-quick >/dev/null 2>&1; then
+              echo "ERROR_AWG_QUICK_NOT_FOUND"
+              exit 1
+            fi
             echo "AWG_TOOLS_FOUND"
 
             SERVER_PRIV="$(awk -F= '/^[[:space:]]*PrivateKey[[:space:]]*=/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$SERVER_CFG")"
@@ -62,11 +68,12 @@ jobs:
             SISTER_PRIV="$(awg genkey)"
             SISTER_PUB="$(printf '%s' "$SISTER_PRIV" | awg pubkey)"
             SISTER_PSK="$(awg genpsk)"
+            echo "CLIENT_KEYS_GENERATED"
 
             BACKUP="$SERVER_CFG.backup-family-$(date -u +%Y%m%d-%H%M%S)"
             cp -a "$SERVER_CFG" "$BACKUP"
             chmod 600 "$BACKUP"
-            echo "SERVER_CONFIG_BACKED_UP"
+            echo "SERVER_CONFIG_BACKED_UP: $BACKUP"
 
             TMP_CFG="$(mktemp)"
             awk '
@@ -79,22 +86,22 @@ jobs:
             cat "$TMP_CFG" > "$SERVER_CFG"
             rm -f "$TMP_CFG"
 
-            cat >> "$SERVER_CFG" <<EOF
-
-# BEGIN FAMILY_MAMA
-[Peer]
-PublicKey = $MAMA_PUB
-PresharedKey = $MAMA_PSK
-AllowedIPs = 10.66.66.3/32
-# END FAMILY_MAMA
-
-# BEGIN FAMILY_SISTER
-[Peer]
-PublicKey = $SISTER_PUB
-PresharedKey = $SISTER_PSK
-AllowedIPs = 10.66.66.4/32
-# END FAMILY_SISTER
-EOF
+            {
+              printf '\n'
+              printf '%s\n' "# BEGIN FAMILY_MAMA"
+              printf '%s\n' "[Peer]"
+              printf '%s\n' "PublicKey = $MAMA_PUB"
+              printf '%s\n' "PresharedKey = $MAMA_PSK"
+              printf '%s\n' "AllowedIPs = 10.66.66.3/32"
+              printf '%s\n' "# END FAMILY_MAMA"
+              printf '\n'
+              printf '%s\n' "# BEGIN FAMILY_SISTER"
+              printf '%s\n' "[Peer]"
+              printf '%s\n' "PublicKey = $SISTER_PUB"
+              printf '%s\n' "PresharedKey = $SISTER_PSK"
+              printf '%s\n' "AllowedIPs = 10.66.66.4/32"
+              printf '%s\n' "# END FAMILY_SISTER"
+            } >> "$SERVER_CFG"
             chmod 600 "$SERVER_CFG"
             echo "FAMILY_PEERS_WRITTEN"
 
@@ -119,53 +126,49 @@ EOF
             echo "AWG0_SHOW_OK"
 
             echo "========== MAMA_AMNEZIAWG_CONFIG_START =========="
-            cat <<EOF
-[Interface]
-PrivateKey = $MAMA_PRIV
-Address = 10.66.66.3/32
-DNS = 1.1.1.1, 8.8.8.8
-Jc = 8
-Jmin = 8
-Jmax = 80
-S1 = 44
-S2 = 105
-H1 = 1206364837
-H2 = 1849372711
-H3 = 1948428175
-H4 = 395628712
-
-[Peer]
-PublicKey = $SERVER_PUB
-PresharedKey = $MAMA_PSK
-AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = $ENDPOINT_HOST:$VPN_PORT
-PersistentKeepalive = 25
-EOF
+            printf '%s\n' "[Interface]"
+            printf '%s\n' "PrivateKey = $MAMA_PRIV"
+            printf '%s\n' "Address = 10.66.66.3/32"
+            printf '%s\n' "DNS = 1.1.1.1, 8.8.8.8"
+            printf '%s\n' "Jc = 8"
+            printf '%s\n' "Jmin = 8"
+            printf '%s\n' "Jmax = 80"
+            printf '%s\n' "S1 = 44"
+            printf '%s\n' "S2 = 105"
+            printf '%s\n' "H1 = 1206364837"
+            printf '%s\n' "H2 = 1849372711"
+            printf '%s\n' "H3 = 1948428175"
+            printf '%s\n' "H4 = 395628712"
+            printf '\n'
+            printf '%s\n' "[Peer]"
+            printf '%s\n' "PublicKey = $SERVER_PUB"
+            printf '%s\n' "PresharedKey = $MAMA_PSK"
+            printf '%s\n' "AllowedIPs = 0.0.0.0/0, ::/0"
+            printf '%s\n' "Endpoint = $ENDPOINT_HOST:$VPN_PORT"
+            printf '%s\n' "PersistentKeepalive = 25"
             echo "========== MAMA_AMNEZIAWG_CONFIG_END =========="
 
             echo "========== SISTER_AMNEZIAWG_CONFIG_START =========="
-            cat <<EOF
-[Interface]
-PrivateKey = $SISTER_PRIV
-Address = 10.66.66.4/32
-DNS = 1.1.1.1, 8.8.8.8
-Jc = 8
-Jmin = 8
-Jmax = 80
-S1 = 44
-S2 = 105
-H1 = 1206364837
-H2 = 1849372711
-H3 = 1948428175
-H4 = 395628712
-
-[Peer]
-PublicKey = $SERVER_PUB
-PresharedKey = $SISTER_PSK
-AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = $ENDPOINT_HOST:$VPN_PORT
-PersistentKeepalive = 25
-EOF
+            printf '%s\n' "[Interface]"
+            printf '%s\n' "PrivateKey = $SISTER_PRIV"
+            printf '%s\n' "Address = 10.66.66.4/32"
+            printf '%s\n' "DNS = 1.1.1.1, 8.8.8.8"
+            printf '%s\n' "Jc = 8"
+            printf '%s\n' "Jmin = 8"
+            printf '%s\n' "Jmax = 80"
+            printf '%s\n' "S1 = 44"
+            printf '%s\n' "S2 = 105"
+            printf '%s\n' "H1 = 1206364837"
+            printf '%s\n' "H2 = 1849372711"
+            printf '%s\n' "H3 = 1948428175"
+            printf '%s\n' "H4 = 395628712"
+            printf '\n'
+            printf '%s\n' "[Peer]"
+            printf '%s\n' "PublicKey = $SERVER_PUB"
+            printf '%s\n' "PresharedKey = $SISTER_PSK"
+            printf '%s\n' "AllowedIPs = 0.0.0.0/0, ::/0"
+            printf '%s\n' "Endpoint = $ENDPOINT_HOST:$VPN_PORT"
+            printf '%s\n' "PersistentKeepalive = 25"
             echo "========== SISTER_AMNEZIAWG_CONFIG_END =========="
 
             echo "DONE_FAMILY_CLIENTS"
