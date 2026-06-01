@@ -1,0 +1,315 @@
+name: Aeza Reality Family Fallback
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/aeza-reality-family-fallback.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  reality-family-fallback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout memory repo
+        uses: actions/checkout@v4
+
+      - name: Install or update Xray Reality TCP443 fallback on Aeza
+        id: reality_family
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          set -u
+          mkdir -p notes
+          : > reality-family-run.log
+          status=0
+
+          echo "LOCAL_WORKFLOW_OK" | tee -a reality-family-run.log
+          echo "MODE_REALITY_TCP443_FALLBACK_ONLY" | tee -a reality-family-run.log
+          echo "DO_NOT_TOUCH_AMNEZIAWG" | tee -a reality-family-run.log
+
+          sudo apt-get update >> reality-family-run.log 2>&1 || status=$?
+          if [ "$status" -eq 0 ]; then
+            sudo apt-get install -y sshpass >> reality-family-run.log 2>&1 || status=$?
+          fi
+
+          cat > remote-reality-family.sh <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+          echo "SSH_OK"
+          echo "REMOTE_MODE_REALITY_TCP443_FALLBACK_ONLY"
+          echo "AMNEZIAWG_NOT_MODIFIED"
+
+          ENDPOINT_HOST="${ENDPOINT_HOST:?ENDPOINT_HOST missing}"
+          XRAY_CFG="/usr/local/etc/xray/config.json"
+          SUDO=""
+          if [ "$(id -u)" -ne 0 ]; then
+            SUDO="sudo"
+          fi
+
+          echo "CHECK_TCP_443"
+          TCP443_LISTENERS="$($SUDO ss -ltnp 2>/dev/null | awk '$4 ~ /:443$/ {print}' || true)"
+          if [ -n "$TCP443_LISTENERS" ]; then
+            printf '%s\n' "$TCP443_LISTENERS"
+            if ! printf '%s\n' "$TCP443_LISTENERS" | grep -qi 'xray'; then
+              echo "ERROR_TCP443_OCCUPIED_BY_NON_XRAY"
+              exit 1
+            fi
+            echo "TCP443_ALREADY_XRAY_OR_COMPATIBLE"
+          else
+            echo "TCP443_FREE"
+          fi
+
+          export DEBIAN_FRONTEND=noninteractive
+          $SUDO apt-get update
+          $SUDO apt-get install -y curl unzip openssl ca-certificates python3
+
+          if ! command -v xray >/dev/null 2>&1; then
+            echo "XRAY_INSTALL_START"
+            $SUDO bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+            echo "XRAY_INSTALL_DONE"
+          else
+            echo "XRAY_ALREADY_INSTALLED"
+          fi
+
+          $SUDO mkdir -p /usr/local/etc/xray
+          if $SUDO test -f "$XRAY_CFG"; then
+            BACKUP="$XRAY_CFG.backup-family-$(date -u +%Y%m%d-%H%M%S)"
+            $SUDO cp -a "$XRAY_CFG" "$BACKUP"
+            $SUDO chmod 600 "$BACKUP"
+            echo "XRAY_CONFIG_BACKED_UP"
+          else
+            echo "XRAY_CONFIG_NEW"
+          fi
+
+          TMP_PY="$(mktemp)"
+          cat > "$TMP_PY" <<'PY_SCRIPT'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          cfg_path = Path(os.environ["XRAY_CFG"])
+
+          def run(args):
+              return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT).strip()
+
+          def new_uuid():
+              return run(["xray", "uuid"])
+
+          def parse_key(text, label):
+              for line in text.splitlines():
+                  lower = line.lower()
+                  if label in lower and ":" in line:
+                      return line.split(":", 1)[1].strip()
+                  parts = line.split()
+                  if label in lower and parts:
+                      return parts[-1].strip()
+              return ""
+
+          def new_x25519():
+              out = run(["xray", "x25519"])
+              priv = parse_key(out, "private")
+              pub = parse_key(out, "public")
+              if not priv or not pub:
+                  raise SystemExit("ERROR_X25519_PARSE_FAILED")
+              return priv, pub
+
+          def public_from_private(private_key):
+              out = run(["xray", "x25519", "-i", private_key])
+              pub = parse_key(out, "public")
+              if not pub:
+                  raise SystemExit("ERROR_X25519_PUBLIC_DERIVE_FAILED")
+              return pub
+
+          def new_short_id():
+              return subprocess.check_output(["openssl", "rand", "-hex", "8"], text=True).strip()
+
+          if cfg_path.exists():
+              data = json.loads(cfg_path.read_text())
+          else:
+              data = {}
+
+          data.setdefault("log", {"loglevel": "warning"})
+          data.setdefault("inbounds", [])
+          data.setdefault("outbounds", [{"protocol": "freedom", "tag": "direct"}])
+
+          inbound = None
+          for item in data["inbounds"]:
+              if item.get("tag") == "vless-reality-family":
+                  inbound = item
+                  break
+          if inbound is None:
+              for item in data["inbounds"]:
+                  if item.get("port") == 443 and item.get("protocol") == "vless":
+                      inbound = item
+                      break
+
+          if inbound is None:
+              private_key, public_key = new_x25519()
+              sid = new_short_id()
+              inbound = {
+                  "tag": "vless-reality-family",
+                  "listen": "0.0.0.0",
+                  "port": 443,
+                  "protocol": "vless",
+                  "settings": {
+                      "clients": [],
+                      "decryption": "none"
+                  },
+                  "streamSettings": {
+                      "network": "tcp",
+                      "security": "reality",
+                      "realitySettings": {
+                          "show": False,
+                          "dest": "www.cloudflare.com:443",
+                          "xver": 0,
+                          "serverNames": ["www.cloudflare.com"],
+                          "privateKey": private_key,
+                          "shortIds": [sid]
+                      }
+                  }
+              }
+              data["inbounds"].append(inbound)
+          else:
+              if inbound.get("port") != 443 or inbound.get("protocol") != "vless":
+                  raise SystemExit("ERROR_UNSUPPORTED_EXISTING_443_INBOUND")
+              stream = inbound.setdefault("streamSettings", {})
+              if stream.get("network", "tcp") != "tcp" or stream.get("security") != "reality":
+                  raise SystemExit("ERROR_EXISTING_443_NOT_REALITY_TCP")
+              settings = inbound.setdefault("settings", {})
+              settings.setdefault("clients", [])
+              settings["decryption"] = "none"
+              reality = stream.setdefault("realitySettings", {})
+              reality.setdefault("show", False)
+              reality.setdefault("dest", "www.cloudflare.com:443")
+              reality.setdefault("xver", 0)
+              reality.setdefault("serverNames", ["www.cloudflare.com"])
+              if not reality.get("privateKey"):
+                  private_key, public_key = new_x25519()
+                  reality["privateKey"] = private_key
+              if not reality.get("shortIds"):
+                  reality["shortIds"] = [new_short_id()]
+
+          settings = inbound.setdefault("settings", {})
+          clients = settings.setdefault("clients", [])
+          stream = inbound.setdefault("streamSettings", {})
+          reality = stream.setdefault("realitySettings", {})
+          public_key = public_from_private(reality["privateKey"])
+          sid = reality.get("shortIds", [""])[0]
+          sni = reality.get("serverNames", ["www.cloudflare.com"])[0]
+
+          def ensure_client(email):
+              for client in clients:
+                  if client.get("email") == email:
+                      return client["id"]
+              uid = new_uuid()
+              clients.append({"id": uid, "email": email})
+              return uid
+
+          mama_uuid = ensure_client("mama@family.local")
+          sister_uuid = ensure_client("sister@family.local")
+
+          cfg_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+          with open(os.environ["REALITY_RESULT"], "w") as f:
+              f.write(f"PUBLIC_KEY={public_key}\n")
+              f.write(f"SHORT_ID={sid}\n")
+              f.write(f"SNI={sni}\n")
+              f.write(f"MAMA_UUID={mama_uuid}\n")
+              f.write(f"SISTER_UUID={sister_uuid}\n")
+          PY_SCRIPT
+
+          REALITY_RESULT="$(mktemp)"
+          $SUDO env XRAY_CFG="$XRAY_CFG" REALITY_RESULT="$REALITY_RESULT" python3 "$TMP_PY"
+          rm -f "$TMP_PY"
+          $SUDO chmod 600 "$XRAY_CFG"
+          echo "XRAY_CONFIG_FAMILY_READY"
+
+          . "$REALITY_RESULT"
+          rm -f "$REALITY_RESULT"
+
+          if command -v ufw >/dev/null 2>&1; then
+            $SUDO ufw allow 443/tcp || true
+            $SUDO ufw reload || true
+          fi
+          $SUDO iptables -I INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
+          echo "TCP443_FIREWALL_RULE_ATTEMPTED"
+
+          $SUDO systemctl enable xray
+          $SUDO systemctl restart xray
+          sleep 2
+          $SUDO systemctl is-active xray
+          echo "XRAY_ACTIVE"
+
+          $SUDO xray run -test -config "$XRAY_CFG"
+          echo "XRAY_CONFIG_TEST_OK"
+
+          echo "========== MAMA_REALITY_LINK_START =========="
+          printf 'vless://%s@%s:443?type=tcp&security=reality&encryption=none&pbk=%s&fp=chrome&sni=%s&sid=%s&spx=%%2F&headerType=none#%s\n' \
+            "$MAMA_UUID" "$ENDPOINT_HOST" "$PUBLIC_KEY" "$SNI" "$SHORT_ID" "Mama-Aeza-Reality-TCP443"
+          echo "========== MAMA_REALITY_LINK_END =========="
+
+          echo "========== SISTER_REALITY_LINK_START =========="
+          printf 'vless://%s@%s:443?type=tcp&security=reality&encryption=none&pbk=%s&fp=chrome&sni=%s&sid=%s&spx=%%2F&headerType=none#%s\n' \
+            "$SISTER_UUID" "$ENDPOINT_HOST" "$PUBLIC_KEY" "$SNI" "$SHORT_ID" "Sister-Aeza-Reality-TCP443"
+          echo "========== SISTER_REALITY_LINK_END =========="
+
+          echo "DONE_REALITY_FAMILY_FALLBACK"
+          REMOTE_SCRIPT
+
+          if [ "$status" -eq 0 ]; then
+            chmod 600 remote-reality-family.sh
+            set +e
+            SSHPASS="$VPS_PASSWORD" sshpass -e ssh \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=30 \
+              "$VPS_USER@$VPS_HOST" \
+              "ENDPOINT_HOST='$VPS_HOST' bash -s" \
+              < remote-reality-family.sh 2>&1 | tee -a reality-family-run.log
+            status=${PIPESTATUS[0]}
+            set -u
+          fi
+
+          {
+            echo "# Xray Reality family fallback last run"
+            echo
+            echo "- UTC: $(date -u -Iseconds)"
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Exit code: $status"
+            echo
+            echo '```text'
+            awk '
+              /MAMA_REALITY_LINK_START/ { print "[MAMA_REALITY_LINK_REDACTED_IN_REPO_SEE_ACTION_LOG]"; skip=1; next }
+              /MAMA_REALITY_LINK_END/ { skip=0; next }
+              /SISTER_REALITY_LINK_START/ { print "[SISTER_REALITY_LINK_REDACTED_IN_REPO_SEE_ACTION_LOG]"; skip=1; next }
+              /SISTER_REALITY_LINK_END/ { skip=0; next }
+              skip != 1 { print }
+            ' reality-family-run.log
+            echo '```'
+          } > notes/xray-reality-family-last-run.md
+
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Commit redacted Reality family status
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add notes/xray-reality-family-last-run.md
+          git commit -m "Record Xray Reality family fallback status" || true
+          git push || true
+
+      - name: Fail if Reality family workflow failed
+        if: steps.reality_family.outputs.exit_code != '0'
+        run: exit 1
