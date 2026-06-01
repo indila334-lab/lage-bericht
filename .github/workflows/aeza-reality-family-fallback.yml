@@ -230,8 +230,10 @@ jobs:
           REALITY_RESULT="$(mktemp)"
           $SUDO env XRAY_CFG="$XRAY_CFG" REALITY_RESULT="$REALITY_RESULT" python3 "$TMP_PY"
           rm -f "$TMP_PY"
-          $SUDO chmod 600 "$XRAY_CFG"
+          $SUDO chmod 644 "$XRAY_CFG"
           echo "XRAY_CONFIG_FAMILY_READY"
+          $SUDO xray run -test -config "$XRAY_CFG"
+          echo "XRAY_CONFIG_TEST_OK"
 
           . "$REALITY_RESULT"
           rm -f "$REALITY_RESULT"
@@ -246,11 +248,14 @@ jobs:
           $SUDO systemctl enable xray
           $SUDO systemctl restart xray
           sleep 2
-          $SUDO systemctl is-active xray
-          echo "XRAY_ACTIVE"
-
-          $SUDO xray run -test -config "$XRAY_CFG"
-          echo "XRAY_CONFIG_TEST_OK"
+          if $SUDO systemctl is-active xray; then
+            echo "XRAY_ACTIVE"
+          else
+            echo "ERROR_XRAY_SERVICE_NOT_ACTIVE"
+            $SUDO systemctl status xray --no-pager || true
+            $SUDO journalctl -u xray -n 80 --no-pager || true
+            exit 1
+          fi
 
           echo "========== MAMA_REALITY_LINK_START =========="
           printf 'vless://%s@%s:443?type=tcp&security=reality&encryption=none&pbk=%s&fp=chrome&sni=%s&sid=%s&spx=%%2F&headerType=none#%s\n' \
