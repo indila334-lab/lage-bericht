@@ -1,0 +1,226 @@
+name: Aeza AmneziaWG Add Sister Only
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/aeza-amneziawg-sister-only.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  add-sister-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout memory repo
+        uses: actions/checkout@v4
+
+      - name: Add or replace only Lena sister AmneziaWG peer on Aeza
+        id: add_sister
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          set -u
+          mkdir -p notes
+          : > sister-only-run.log
+          status=0
+
+          echo "LOCAL_WORKFLOW_OK" | tee -a sister-only-run.log
+          echo "MODE_SISTER_ONLY_SAFE_ADD_PEER" | tee -a sister-only-run.log
+          echo "DO_NOT_TOUCH_MARINA" | tee -a sister-only-run.log
+          echo "DO_NOT_TOUCH_FAMILY_MAMA" | tee -a sister-only-run.log
+          echo "DO_NOT_RUN_FULL_INSTALL" | tee -a sister-only-run.log
+
+          sudo apt-get update >> sister-only-run.log 2>&1 || status=$?
+          if [ "$status" -eq 0 ]; then
+            sudo apt-get install -y sshpass >> sister-only-run.log 2>&1 || status=$?
+          fi
+
+          cat > remote-sister-only.sh <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+          echo "SSH_OK"
+          echo "REMOTE_MODE_SISTER_ONLY_SAFE_ADD_PEER"
+          echo "AMNEZIAWG_SERVER_NOT_REINSTALLED"
+          echo "FAMILY_MAMA_NOT_MODIFIED"
+
+          VPN_PORT="443"
+          IFACE="awg0"
+          ENDPOINT_HOST="${ENDPOINT_HOST:?ENDPOINT_HOST missing}"
+          SUDO=""
+          if [ "$(id -u)" -ne 0 ]; then
+            SUDO="sudo"
+          fi
+
+          SERVER_CFG=""
+          for candidate in /etc/amneziawg/awg0.conf /etc/wireguard/awg0.conf /etc/wireguard/wg0.conf; do
+            if $SUDO test -f "$candidate"; then
+              SERVER_CFG="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$SERVER_CFG" ]; then
+            SERVER_CFG="$($SUDO find /etc -maxdepth 3 -type f \( -name 'awg*.conf' -o -name 'wg*.conf' \) 2>/dev/null | head -n 1 || true)"
+          fi
+
+          if [ -z "$SERVER_CFG" ] || ! $SUDO test -f "$SERVER_CFG"; then
+            echo "ERROR_SERVER_CONFIG_NOT_FOUND"
+            exit 1
+          fi
+          echo "SERVER_CONFIG_FOUND"
+          echo "SERVER_CONFIG_PATH=$SERVER_CFG"
+
+          if ! command -v awg >/dev/null 2>&1; then
+            echo "ERROR_AWG_NOT_FOUND"
+            exit 1
+          fi
+          if ! command -v awg-quick >/dev/null 2>&1; then
+            echo "ERROR_AWG_QUICK_NOT_FOUND"
+            exit 1
+          fi
+          echo "AWG_TOOLS_FOUND"
+
+          SERVER_PRIV="$($SUDO sed -n 's/^[[:space:]]*PrivateKey[[:space:]]*=[[:space:]]*//p' "$SERVER_CFG" | head -n1 | tr -d '\r')"
+          if [ -z "$SERVER_PRIV" ]; then
+            echo "ERROR_SERVER_PRIVATE_KEY_NOT_FOUND"
+            exit 1
+          fi
+          echo "SERVER_PRIVATE_KEY_READ"
+
+          SERVER_PUB="$(printf '%s\n' "$SERVER_PRIV" | awg pubkey)"
+          if [ -z "$SERVER_PUB" ]; then
+            echo "ERROR_SERVER_PUBLIC_KEY_DERIVE_FAILED"
+            exit 1
+          fi
+          echo "SERVER_PUBLIC_KEY_READY"
+
+          SISTER_PRIV="$(awg genkey)"
+          SISTER_PUB="$(printf '%s\n' "$SISTER_PRIV" | awg pubkey)"
+          SISTER_PSK="$(awg genpsk)"
+          echo "SISTER_CLIENT_KEYS_GENERATED"
+
+          BACKUP="$SERVER_CFG.backup-sister-only-$(date -u +%Y%m%d-%H%M%S)"
+          $SUDO cp -a "$SERVER_CFG" "$BACKUP"
+          $SUDO chmod 600 "$BACKUP"
+          echo "SERVER_CONFIG_BACKED_UP"
+
+          TMP_CFG="$(mktemp)"
+          $SUDO awk '
+            /^# BEGIN FAMILY_SISTER$/ { skip=1; next }
+            /^# END FAMILY_SISTER$/ { skip=0; next }
+            skip != 1 { print }
+          ' "$SERVER_CFG" > "$TMP_CFG"
+          $SUDO cp "$TMP_CFG" "$SERVER_CFG"
+          rm -f "$TMP_CFG"
+
+          {
+            printf '\n'
+            printf '%s\n' "# BEGIN FAMILY_SISTER"
+            printf '%s\n' "[Peer]"
+            printf '%s\n' "PublicKey = $SISTER_PUB"
+            printf '%s\n' "PresharedKey = $SISTER_PSK"
+            printf '%s\n' "AllowedIPs = 10.66.66.4/32"
+            printf '%s\n' "# END FAMILY_SISTER"
+          } | $SUDO tee -a "$SERVER_CFG" >/dev/null
+          $SUDO chmod 600 "$SERVER_CFG"
+          echo "SISTER_PEER_WRITTEN"
+
+          TMP_STRIP="$(mktemp)"
+          if ip link show "$IFACE" >/dev/null 2>&1; then
+            if $SUDO awg-quick strip "$SERVER_CFG" > "$TMP_STRIP" && $SUDO awg syncconf "$IFACE" "$TMP_STRIP"; then
+              echo "AWG_SYNCCONF_OK"
+            else
+              echo "AWG_SYNCCONF_FAILED_TRYING_DOWN_UP"
+              $SUDO awg-quick down "$SERVER_CFG" || true
+              $SUDO awg-quick up "$SERVER_CFG"
+              echo "AWG_DOWN_UP_OK"
+            fi
+          else
+            echo "AWG0_NOT_RUNNING_TRYING_UP"
+            $SUDO awg-quick up "$SERVER_CFG"
+            echo "AWG_UP_OK"
+          fi
+          rm -f "$TMP_STRIP"
+
+          $SUDO awg show "$IFACE" >/dev/null
+          echo "AWG0_SHOW_OK"
+
+          echo "========== SISTER_AMNEZIAWG_CONFIG_START =========="
+          printf '%s\n' "[Interface]"
+          printf '%s\n' "PrivateKey = $SISTER_PRIV"
+          printf '%s\n' "Address = 10.66.66.4/32"
+          printf '%s\n' "DNS = 1.1.1.1, 8.8.8.8"
+          printf '%s\n' "Jc = 8"
+          printf '%s\n' "Jmin = 8"
+          printf '%s\n' "Jmax = 80"
+          printf '%s\n' "S1 = 44"
+          printf '%s\n' "S2 = 105"
+          printf '%s\n' "H1 = 1206364837"
+          printf '%s\n' "H2 = 1849372711"
+          printf '%s\n' "H3 = 1948428175"
+          printf '%s\n' "H4 = 395628712"
+          printf '\n'
+          printf '%s\n' "[Peer]"
+          printf '%s\n' "PublicKey = $SERVER_PUB"
+          printf '%s\n' "PresharedKey = $SISTER_PSK"
+          printf '%s\n' "AllowedIPs = 0.0.0.0/0, ::/0"
+          printf '%s\n' "Endpoint = $ENDPOINT_HOST:$VPN_PORT"
+          printf '%s\n' "PersistentKeepalive = 25"
+          echo "========== SISTER_AMNEZIAWG_CONFIG_END =========="
+
+          echo "DONE_SISTER_ONLY_CLIENT"
+          REMOTE_SCRIPT
+
+          if [ "$status" -eq 0 ]; then
+            chmod 600 remote-sister-only.sh
+            set +e
+            SSHPASS="$VPS_PASSWORD" sshpass -e ssh \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=30 \
+              "$VPS_USER@$VPS_HOST" \
+              "ENDPOINT_HOST='$VPS_HOST' bash -s" \
+              < remote-sister-only.sh 2>&1 | tee -a sister-only-run.log
+            status=${PIPESTATUS[0]}
+            set -u
+          fi
+
+          {
+            echo "# AmneziaWG sister-only client last run"
+            echo
+            echo "- UTC: $(date -u -Iseconds)"
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Exit code: $status"
+            echo
+            echo '```text'
+            awk '
+              /SISTER_AMNEZIAWG_CONFIG_START/ { print "[SISTER_CONFIG_REDACTED_IN_REPO_SEE_ACTION_LOG]"; skip=1; next }
+              /SISTER_AMNEZIAWG_CONFIG_END/ { skip=0; next }
+              skip != 1 { print }
+            ' sister-only-run.log
+            echo '```'
+          } > notes/amneziawg-sister-only-last-run.md
+
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Commit redacted sister-only workflow status
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add notes/amneziawg-sister-only-last-run.md
+          git commit -m "Record AmneziaWG sister-only workflow status" || true
+          git push || true
+
+      - name: Fail if sister-only workflow failed
+        if: steps.add_sister.outputs.exit_code != '0'
+        run: exit 1
